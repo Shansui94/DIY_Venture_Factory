@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Reset & Clear Cache</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: sans-serif; padding: 20px; text-align: center; }
+        .btn { padding: 15px 30px; background: red; color: white; border: none; font-size: 18px; border-radius: 8px; margin-top: 20px; cursor: pointer; }
+        .log { margin-top: 20px; text-align: left; background: #eee; padding: 10px; font-family: monospace; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>🛠️ Force Reset App</h1>
+    <p>This will clear all data and checkers on this device to fix "Stuck" issues.</p>
+    <button class="btn" onclick="nukeIt()">💣 CLEAR EVERYTHING</button>
+    <div id="log" class="log"></div>
+
+    <script>
+        function log(msg) {
+            document.getElementById('log').innerHTML += "<div>" + msg + "</div>";
+            console.log(msg);
+        }
+
+        async function nukeIt() {
+            log("Starting cleanup...");
+            
+            // 1. Unregister Service Workers
+            if ('serviceWorker' in navigator) {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                for (let registration of registrations) {
+                    await registration.unregister();
+                    log("Deleted Service Worker: " + registration.scope);
+                }
+            } else {
+                log("No Service Workers found.");
+            }
+
+            // 2. Clear Cache Storage
+            if ('caches' in window) {
+                const keys = await caches.keys();
+                for (let key of keys) {
+                    await caches.delete(key);
+                    log("Deleted Cache: " + key);
+                }
+            }
+
+            // 3. Clear Storage
+            localStorage.clear();
+            sessionStorage.clear();
+            log("Cleared Local/Session Storage.");
+
+            // 4. Force Reload
+            log("Done! Redirecting in 2 seconds...");
+            setTimeout(() => {
+                // Redirect with random param to bypass browser cache
+                window.location.href = "/?t=" + Date.now();
+            }, 2000);
+        }
+    </script>
+</body>
+</html>

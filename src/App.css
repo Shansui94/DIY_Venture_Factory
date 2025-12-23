@@ -1,0 +1,73 @@
+#root {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: filter 300ms;
+}
+
+.logo:hover {
+  filter: drop-shadow(0 0 2em #646cffaa);
+}
+
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafbaa);
+}
+
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  a:nth-of-type(2) .logo {
+    animation: logo-spin infinite 20s linear;
+  }
+}
+
+.card {
+  padding: 2em;
+}
+
+
+.read-the-docs {
+  color: #888;
+}
+
+/* Mobile View Fixes */
+@media (max-width: 1024px) {
+
+  /* Force hide sidebar on mobile if Tailwind classes fail */
+  .lg\:flex {
+    display: none !important;
+  }
+
+  /* Ensure mobile nav is visible */
+  .lg\:hidden {
+    display: flex !important;
+  }
+
+  /* Ensure content is not blocked */
+  .ml-64 {
+    margin-left: 0 !important;
+  }
+}
+
+/* Touch Target Size Fix */
+button,
+a {
+  min-height: 44px;
+  min-width: 44px;
+  touch-action: manipulation;
+}

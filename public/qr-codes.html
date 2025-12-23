@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Factory Machine QR Codes</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 40px;
+            background: #f0f2f5;
+        }
+
+        h1 {
+            text-align: center;
+            color: #1a1a1a;
+            margin-bottom: 40px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 30px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            transition: transform 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .qr-code {
+            width: 200px;
+            height: 200px;
+            margin-bottom: 20px;
+        }
+
+        .id {
+            font-size: 24px;
+            font-weight: bold;
+            color: #3b82f6;
+            margin-bottom: 8px;
+        }
+
+        .name {
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        .factory {
+            display: inline-block;
+            background: #e5e7eb;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            margin-top: 12px;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .print-btn {
+            display: block;
+            width: 200px;
+            margin: 20px auto;
+            padding: 12px;
+            background: #2563eb;
+            color: white;
+            text-align: center;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+        }
+
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+
+            .print-btn {
+                display: none;
+            }
+
+            .card {
+                box-shadow: none;
+                border: 1px solid #ddd;
+                break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🏭 Factory Machine QR Codes</h1>
+
+    <button class="print-btn" onclick="window.print()">Print QR Codes</button>
+
+    <div class="grid">
+        <!-- Machine Items (Updated from factoryData.ts) -->
+        <!-- Taiping T1 -->
+        <div class="card">
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=T1.1-M03" class="qr-code"
+                alt="T1.1-M03">
+            <div class="id">T1.1-M03</div>
+            <div class="name">Stretch Film (T1.1)</div>
+            <div class="factory">Taiping (T1)</div>
+        </div>
+
+        <div class="card">
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=T1.2-M01" class="qr-code"
+                alt="T1.2-M01">
+            <div class="id">T1.2-M01</div>
+            <div class="name">2M Double Layer (T1.2)</div>
+            <div class="factory">Taiping (T1)</div>
+        </div>
+
+        <div class="card">
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=T1.3-M02" class="qr-code"
+                alt="T1.3-M02">
+            <div class="id">T1.3-M02</div>
+            <div class="name">1M Single Layer (T1.3)</div>
+            <div class="factory">Taiping (T1)</div>
+        </div>
+
+        <!-- Nilai N1 -->
+        <div class="card">
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=N1-M01" class="qr-code"
+                alt="N1-M01">
+            <div class="id">N1-M01</div>
+            <div class="name">1M Double Layer (N1)</div>
+            <div class="factory">Nilai (N1)</div>
+        </div>
+
+        <!-- Nilai N2 -->
+        <div class="card">
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=N2-M02" class="qr-code"
+                alt="N2-M02">
+            <div class="id">N2-M02</div>
+            <div class="name">1M Single Layer (N2)</div>
+            <div class="factory">Nilai (N2)</div>
+        </div>
+    </div>
+</body>
+
+</html>

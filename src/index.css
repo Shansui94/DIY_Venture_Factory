@@ -1,0 +1,100 @@
+@import "tailwindcss";
+
+:root {
+  --bg-primary: #0f172a;
+  --text-primary: #f1f5f9;
+  --bg-secondary: #1e293b;
+  --bg-card: rgba(30, 41, 59, 0.7);
+  --text-secondary: #94a3b8;
+  --text-accent: #38bdf8;
+  --accent-primary: #3b82f6;
+  --accent-secondary: #10b981;
+  --accent-warning: #f59e0b;
+  --accent-danger: #ef4444;
+  --glass-border: 1px solid rgba(255, 255, 255, 0.1);
+  --glass-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  --font-main: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-main);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  overscroll-behavior-y: none;
+  /* Prevent pull-to-refresh bounce */
+}
+
+/* Prevent iOS Zoom on inputs */
+@media screen and (max-width: 768px) {
+
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Keep Glassmorphism for backward compatibility if needed, but prefer Tailwind classes */
+.glass-panel {
+  @apply bg-slate-900/70 backdrop-blur-xl border border-white/10 shadow-xl rounded-2xl;
+}
+
+.glass-card {
+  @apply bg-white/5 border border-white/5 rounded-xl p-6 transition-all hover:-translate-y-0.5 hover:shadow-2xl hover:border-white/10;
+}
+
+.btn {
+  @apply px-6 py-3 rounded-lg font-semibold transition-all text-sm;
+}
+
+.btn-primary {
+  @apply bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/30 hover:shadow-blue-500/40 hover:-translate-y-px;
+}
+
+.btn-secondary {
+  @apply bg-white/10 text-white hover:bg-white/15;
+}
+
+.badge {
+  @apply px-3 py-1 rounded-full text-xs font-bold uppercase;
+}
+
+.badge-production {
+  @apply bg-blue-500/20 text-blue-400 border border-blue-500/30;
+}
+
+/* Mobile Touch Optimization */
+button,
+input,
+select,
+a {
+  min-height: 44px;
+  /* Apple Human Interface Guidelines */
+  touch-action: manipulation;
+  /* Disable double-tap zoom */
+  cursor: pointer;
+}
+
+/* Safe Area for iPhone X+ */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
