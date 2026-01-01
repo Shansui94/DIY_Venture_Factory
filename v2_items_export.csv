@@ -1,0 +1,98 @@
+sku,name,type,category,supply_type,uom,width_mm,length_m,thickness_mic,net_weight_kg,core_weight_kg,gross_weight_kg,pack_qty,volume_cbm,box_dims,min_stock_level,reorder_qty,estimated_cost,status,created_at,supplier,brand,function_usage,legacy_code,packaging_type,description,min_stock_alert
+RM-LL-GA1820,LLDPE Petrothene GA1820,Raw,Resin,Purchased,KG,,,,,,,,,,,,,Active,2025-12-26T16:34:19.268745+00:00,LyondellBasell,Petrothene,Stretch Film Main Base (Provides stretchability),,,,1000
+RM-LL-7059,LLDPE 7059 (OQ),Raw,Resin,Purchased,KG,,,,,,,,,,,,,Active,2025-12-26T16:34:19.268745+00:00,OQ,OQ,Slip Agent (Improves smoothness/opening),,,,500
+RM-LD-N125Y,LDPE Etilinas N125Y,Raw,Resin,Purchased,KG,,,,,,,,,,,,,Active,2025-12-26T16:34:19.268745+00:00,Petronas,Etilinas,Bubble Wrap Structural Base (Support bubbles),,,,500
+RM-LL-C4,LLDPE C4 Linear,Raw,Resin,Purchased,KG,,,,,,,,,,,,,Active,2025-12-26T16:34:19.268745+00:00,ExxonMobil,Exxon,Alternative LLDPE Base,,,,500
+RM-HD-7260,HDPE GC 7260,Raw,Resin,Purchased,KG,,,,,,,,,,,,,Active,2025-12-26T16:34:19.268745+00:00,Sabic/Lyondell,Hostalen/Generic,Hardener (Makes film stiffer/crinkly),,,,500
+RM-LL-ZBB,LLDPE ZBB,Raw,Resin,Purchased,KG,,,,,,,,,,,,,Active,2025-12-26T16:34:19.268745+00:00,Sabic,Sabic,General Linear Resin (Bulk filler),,,,1000
+RM-RC-BLK,Recycle Pellets Black,Raw,Resin,Purchased,KG,,,,,,,,,,,,,Active,2025-12-26T16:34:19.268745+00:00,In-house/Local,Generic,Cost Reduction (For black products only),,,,2000
+RM-MB-BLK,Masterbatch 8092 Black,Raw,Additive,Purchased,KG,,,,,,,,,,,,,Active,2025-12-26T16:34:19.268745+00:00,Local Supplier,Generic,Colorant (Turns film black),,,,200
+RM-ADD-VIS,Vistamaxx Additive,Raw,Additive,Purchased,KG,,,,,,,,,,,,,Active,2025-12-26T16:34:19.268745+00:00,ExxonMobil,Vistamaxx,Tackifier (Makes Stretch Film sticky),,,,100
+RM-CORE-0.2,Paper Core 0.2KG,Raw,Packaging,Purchased,PCS,,,,,,,,,,,,,Active,2025-12-26T16:34:19.268745+00:00,Local Packaging Co,-,Core for 2.2kg Rolls,,,,5000
+RM-CORE-0.05,Paper Core 0.05KG,Raw,Packaging,Purchased,PCS,,,,,,,,,,,,,Active,2025-12-26T16:34:19.268745+00:00,Local Packaging Co,-,Core for Baby Rolls,,,,5000
+SF-22KG-BLACK,Stretch Film Black 2.2kg,FG,StretchFilm,Manufactured,Roll,,,,2,,,,,,,,,Active,2025-12-26T16:34:19.394489+00:00,,,,SF-22KG-BLACK,Carton (6 Rolls),Standard Black Stretch,0
+SF-22KG-CLEAR,Stretch Film Clear 2.2kg,FG,StretchFilm,Manufactured,Roll,,,,2,,,,,,,,,Active,2025-12-26T16:34:19.394489+00:00,,,,SF-22KG-CLEAR,Carton (6 Rolls),Standard Clear Stretch,0
+BABYROLL-CLR,Baby Roll Stretch Film Clear,FG,StretchFilm,Manufactured,Roll,,,,0.25,,,,,,,,,Active,2025-12-26T16:34:19.394489+00:00,,,,BABYROLL-CLEAR,Carton (30 Rolls),Mini Roll for binding,0
+BW-SINGLE-BLK,BW Single Layer Black (1m),FG,Bag,Manufactured,Roll,,,,4.45,,,,,,,,,Active,2025-12-26T16:34:19.394489+00:00,,,,BW-BLACK,Plastic Bag,Standard Black Bubble,0
+BW-DOUBLE-BLK,BW Double Layer Black (1m),FG,Bag,Manufactured,Roll,,,,6.55,,,,,,,,,Active,2025-12-26T16:34:19.394489+00:00,,,,BW-BLACK-DOUBLELAYER-1,Plastic Bag,Heavy Duty Black Bubble,0
+BW-SINGLE-CLR,BW Single Layer Clear (1m),FG,Bag,Manufactured,Roll,,,,4.45,,,,,,,,,Active,2025-12-26T16:34:19.394489+00:00,,,,BW-CLEAR,Plastic Bag,Standard Clear Bubble,0
+BW-DOUBLE-CLR,BW Double Layer Clear (1m),FG,Bag,Manufactured,Roll,,,,6.55,,,,,,,,,Active,2025-12-26T16:34:19.394489+00:00,,,,BW-DOUBLELAYER-1,Plastic Bag,Heavy Duty Clear Bubble,0
+BW20CM-BLK,BW Black 20cm Cut,FG,Bag,Manufactured,Roll,,,,0.89,,,,,,,,,Active,2025-12-26T16:34:19.394489+00:00,,,,BW20CM-BLACK-1,Bundle,Small Cut Roll,0
+BW20CM-CLR,BW Clear 20cm Cut,FG,Bag,Manufactured,Roll,,,,0.89,,,,,,,,,Active,2025-12-26T16:34:19.394489+00:00,,,,BW20CM-1,Bundle,Small Cut Roll,0
+BW20CM-1,Bubble Wrap Single Layer Clear 20cm x 100m (1 unit),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW20CM-2,Bubble Wrap Single Layer Clear 20cm x 100m (2 units),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW20CM-3,Bubble Wrap Single Layer Clear 20cm x 100m (3 units),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW20CM-4,Bubble Wrap Single Layer Clear 20cm x 100m (4 units),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW20CM-5,Bubble Wrap Single Layer Clear 20cm x 100m (5 units),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW20CM-BLACK-1,Bubble Wrap Single Layer Black 20cm x 100m (1 unit),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW20CM-BLACK-2,Bubble Wrap Single Layer Black 20cm x 100m (2 unit),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW20CM-BLACK-3,Bubble Wrap Single Layer Black 20cm x 100m (3 unit),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW20CM-BLACK-4,Bubble Wrap Single Layer Black 20cm x 100m (4 unit),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW20CM-BLACK-5,Bubble Wrap Single Layer Black 20cm x 100m (5 unit),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW20CM-DOUBLELAYER-1,Bubble Wrap Double Layer Clear 20cm x 100m (1 unit),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW20CM-DOUBLELAYER-2,Bubble Wrap Double Layer Clear 20cm x 100m (2 unit),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW20CM-DOUBLELAYER-3,Bubble Wrap Double Layer Clear 20cm x 100m (3 unit),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW20CM-DOUBLELAYER-4,Bubble Wrap Double Layer Clear 20cm x 100m (4 unit),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW20CM-DOUBLELAYER-5,Bubble Wrap Double Layer Clear 20cm x 100m (5 unit),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW25CM-1,Bubble Wrap Single Layer Clear 25cm x 100m (1 unit),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW25CM-2,Bubble Wrap Single Layer Clear 25cm x 100m (2 units),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW25CM-3,Bubble Wrap Single Layer Clear 25cm x 100m (3 units),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW25CM-4,Bubble Wrap Single Layer Clear 25cm x 100m (4 units),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW25CM-BLACK-1,Bubble Wrap Single Layer Black 25cm x 100m (1 unit),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW25CM-BLACK-2,Bubble Wrap Single Layer Black 25cm x 100m (2 units),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW25CM-BLACK-3,Bubble Wrap Single Layer Black 25cm x 100m (3 units),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW25CM-BLACK-4,Bubble Wrap Single Layer Black 25cm x 100m (4 units),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW25CM-BLACK-DOUBLELAYER-1,Bubble Wrap Double Layer Black 25cm x 100m (1 unit),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW25CM-BLACK-DOUBLELAYER-2,Bubble Wrap Double Layer Black 25cm x 100m (2 units),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW25CM-BLACK-DOUBLELAYER-3,Bubble Wrap Double Layer Black 25cm x 100m (3 units),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW25CM-BLACK-DOUBLELAYER-4,Bubble Wrap Double Layer Black 25cm x 100m (4 units),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW25CM-DOUBLELAYER-1,Bubble Wrap Double Layer Clear 25cm x 100m (1 unit),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW25CM-DOUBLELAYER-2,Bubble Wrap Double Layer Clear 25cm x 100m (2 units),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW25CM-DOUBLELAYER-3,Bubble Wrap Double Layer Clear 25cm x 100m (3 units),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW25CM-DOUBLELAYER-4,Bubble Wrap Double Layer Clear 25cm x 100m (4 units),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW33CM-1,Bubble Wrap Single Layer Clear 33cm x 100m (1 unit),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW33CM-2,Bubble Wrap Single Layer Clear 33cm x 100m (2 units),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW33CM-3,Bubble Wrap Single Layer Clear 33cm x 100m (3 units),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW33CM-BLACK-1,Bubble Wrap Single Layer Black 33cm x 100m (1 unit),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW33CM-BLACK-2,Bubble Wrap Single Layer Black 33cm x 100m (2 units),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW33CM-BLACK-3,Bubble Wrap Single Layer Black 33cm x 100m (3 units),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW33CM-DOUBLELAYER-1,Bubble Wrap Double Layer Clear 33cm x 100m (1 unit),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW33CM-DOUBLELAYER-2,Bubble Wrap Double Layer Clear 33cm x 100m (2 units),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW33CM-DOUBLELAYER-3,Bubble Wrap Double Layer Clear 33cm x 100m (3 units),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW33CM-DOUBLELAYER-BLACK-1,Bubble Wrap Double Layer Black 33cm x 100m (1 unit),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW33CM-DOUBLELAYER-BLACK-2,Bubble Wrap Double Layer Black 33cm x 100m (2 units),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW33CM-DOUBLELAYER-BLACK-3,Bubble Wrap Double Layer Black 33cm x 100m (3 units),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW-BLACK,Bubble Wrap Single Layer Black 1m x 100m (HITAM FULL),FG,Packaging,Manufactured,Roll,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW-BLACK-50CM-1,Bubble Wrap Single Layer Black 50cm x 100m (1 unit),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW-BLACK-50CM-2,Bubble Wrap Single Layer Black 50cm x 100m (2units) (HITAM HALF),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW-CLEAR,Bubble Wrap Single Layer Clear 1m x 100m (MERAH),FG,Packaging,Manufactured,Roll,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW-CLEAR-50CM-1,Bubble Wrap Single Layer Clear 50cm x 100m (1 unit),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW-CLEAR-50CM-2,Bubble Wrap Single Layer Clear 50cm x 100m (2 units) (OREN),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW-DOUBLELAYER-50CM-1,Bubble Wrap Double Layer Clear 50cm x 100m (1 unit),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW-DOUBLELAYER-50CM-2,Bubble Wrap Double Layer Clear 50cm x 100m (2 units) (DL HALF),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW-DOUBLELAYER-BLACK,Bubble Wrap Double Layer Black 1m x 100m (DL FULL HITAM ),FG,Packaging,Manufactured,Roll,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW-DOUBLELAYERBLACK-50CM-1,Bubble Wrap Double Layer Black 50cm x 100m (1 unit),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW-DOUBLELAYERBLACK-50CM-2,Bubble Wrap Double Layer Black 50cm x 100m (2 units) (DL HALF),FG,Packaging,Manufactured,Unit,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW-DOUBLELAYER-CLEAR,Bubble Wrap Double Layer Clear 1m x 100m (DL FULL),FG,Packaging,Manufactured,Roll,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BW-SV/GY,Bubble Wrap Single Layer Silver/Grey 1m x 100m (SILVER/GREY),FG,Packaging,Manufactured,Roll,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+SF-BLACK-SATUKOTAK6ROLL-22,Stretch Film 2.2kg 200core 23Micron (Black) (One Carton Six Rolls),FG,Packaging,Manufactured,Carton,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+SF-CLEAR-SATUKOTAK6ROLL-22,Stretch Film 2.2kg 200core 23Micron (Clear) (One Carton Six Rolls),FG,Packaging,Manufactured,Carton,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+SF-GREY-SATUKOTAK6ROLL-22,Stretch Film 2.2kg 200core 23Micron (Silver/Grey) (One Carton Six Rolls),FG,Packaging,Manufactured,Carton,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BABYROLL-BLACK,Baby Roll Mini Stretch Film 100mm x 250gram Protective Film (BLACK),FG,Packaging,Manufactured,Roll,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+BABYROLL-CLEAR,Baby Roll Mini Stretch Film 100mm x 250gram Protective Film (CLEAR),FG,Packaging,Manufactured,Roll,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+PROD-BW-SL20-CLR-GRN,Bubble Wrap Single Clear 20cm (5 Rolls) (Green),FG,Packaging,Manufactured,roll,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+PROD-BW-DL25-CLR-BLU,Bubble Wrap Double Clear 25cm (4 Rolls) (Blue),FG,Packaging,Manufactured,roll,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+PROD-BW-SL50-CLR-ORG,Bubble Wrap Single Clear 50cm (2 Rolls) (Orange),FG,Packaging,Manufactured,roll,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+PROD-BW-SL50-BLK-PNK,Bubble Wrap Single Black 50cm (2 Rolls) (Pink),FG,Packaging,Manufactured,roll,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+PROD-BW-DL50-BLK-GRN,Bubble Wrap Double Black 50cm (2 Rolls) (Green),FG,Packaging,Manufactured,roll,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+PROD-BW-DL20-BLK-PNK,Bubble Wrap Double Black 20cm (5 Rolls) (Pink),FG,Packaging,Manufactured,roll,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+PROD-BW-DL33-BLK-PNK,Bubble Wrap Double Black 33cm (3 Rolls) (Pink),FG,Packaging,Manufactured,roll,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+RAW-LDPE-MAIN,LDPE Resin (Resin 主料),Raw,Resin,Manufactured,kg,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+PROD-BW-DL20-CLR-BLU,Bubble Wrap Double Clear 20cm (5 Rolls) (Blue),FG,Packaging,Manufactured,roll,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+PROD-BW-DL100-BLK-PNK,Bubble Wrap Double Black 100cm (1 Roll) (Pink),FG,Packaging,Manufactured,roll,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+PROD-BW-SL25-CLR-GRN,Bubble Wrap Single Clear 25cm (4 Rolls) (Green),FG,Packaging,Manufactured,roll,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+RAW-RESIN-MIX,LDPE/LLDPE Resin Mix,Raw,Resin,Manufactured,kg,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+PROD-BW-DL100-CLR-YEL,Bubble Wrap Double Clear 100cm (1 Roll) (Yellow),FG,Packaging,Manufactured,roll,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+RAW-MB-BLACK,Black Masterbatch,Raw,Resin,Manufactured,kg,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+RAW-MB-SILVER,Silver/Grey Masterbatch,Raw,Resin,Manufactured,kg,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0
+PROD-BW-SL100-CLR-PNK,Bubble Wrap Single Clear 100cm (1 Roll) (Pink),FG,Packaging,Manufactured,roll,,,,,,,,,,100,,,Active,2025-12-27T09:31:54.673852+00:00,Legacy,Legacy,,,,Imported from V2,0

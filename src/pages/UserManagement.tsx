@@ -1,0 +1,316 @@
+import { useState, useEffect } from 'react';
+import { supabase } from '../services/supabase';
+import { User, UserRole } from '../types';
+import { Users, Shield, Search, Mail, Edit2, Phone, DollarSign, X, Save } from 'lucide-react';
+
+interface UserManagementProps {
+    currentUser: User | null;
+}
+
+const UserManagement: React.FC<UserManagementProps> = ({ currentUser }) => {
+    const [users, setUsers] = useState<User[]>([]);
+    const [loading, setLoading] = useState<boolean>(true);
+    const [searchTerm, setSearchTerm] = useState<string>('');
+
+    // Modal State
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingUser, setEditingUser] = useState<User | null>(null);
+
+    // Form State
+    const [formData, setFormData] = useState({
+        name: '',
+        role: 'Operator' as UserRole,
+        phone: '',
+        salary: 0
+    });
+
+    // Subscribe to Users
+    useEffect(() => {
+        const fetchUsers = async () => {
+            const { data, error } = await supabase
+                .from('users_public')
+                .select('*');
+
+            if (error) {
+                console.error("Error fetching users:", error);
+                setLoading(false);
+                return;
+            }
+
+            if (data) {
+                const mappedUsers: User[] = data.map(u => ({
+                    uid: u.id,
+                    email: u.email,
+                    role: u.role as UserRole,
+                    name: u.name || undefined,
+                    phone: u.phone || undefined,
+                    salary: u.salary || 0,
+                    status: u.status as any, // 'Active' | 'Pending' etc
+                    employeeId: u.employee_id || undefined
+                }));
+                setUsers(mappedUsers);
+                setLoading(false);
+            }
+        };
+
+        fetchUsers();
+
+        // Realtime Subscription
+        const channel = supabase.channel('users-list-changes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'users_public' }, fetchUsers)
+            .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
+    }, []);
+
+    const openEditModal = (user: User) => {
+        setEditingUser(user);
+        setFormData({
+            name: user.name || '',
+            role: user.role || 'Operator',
+            phone: user.phone || '',
+            salary: user.salary || 0
+        });
+        setIsModalOpen(true);
+    };
+
+    const closeEditModal = () => {
+        setIsModalOpen(false);
+        setEditingUser(null);
+    };
+
+    const handleSaveUser = async () => {
+        if (!editingUser) return;
+
+        try {
+            const { error } = await supabase
+                .from('users_public')
+                .update({
+                    name: formData.name,
+                    role: formData.role,
+                    phone: formData.phone,
+                    salary: Number(formData.salary)
+                })
+                .eq('id', editingUser.uid);
+
+            if (error) throw error;
+
+            console.log(`Updated profile for ${editingUser.uid}`);
+            closeEditModal();
+            alert("User updated successfully!");
+        } catch (error: any) {
+            console.error("Error updating user:", error);
+            alert("Failed to update user: " + error.message);
+        }
+    };
+
+    const filteredUsers = users.filter(u =>
+        (u.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+        (u.email?.toLowerCase() || '').includes(searchTerm.toLowerCase())
+    );
+
+    const roles: UserRole[] = ['Admin', 'Manager', 'Operator', 'Driver', 'HR'];
+
+    return (
+        <div className="space-y-6">
+            {/* Header */}
+            <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                    <Users className="text-blue-400" /> User Management
+                </h2>
+                <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <input
+                        type="text"
+                        placeholder="Search users..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-9 pr-4 py-2 bg-gray-800 text-white rounded-lg border border-gray-700 focus:outline-none focus:border-blue-500 w-64"
+                    />
+                </div>
+            </div>
+
+            {/* Content Table */}
+            {loading ? (
+                <div className="text-white text-center py-10">Loading users...</div>
+            ) : (
+                <div className="glass-card overflow-hidden">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="bg-white/5 text-gray-400 text-sm uppercase tracking-wider">
+                                <th className="p-4 border-b border-gray-700">User</th>
+                                <th className="p-4 border-b border-gray-700">Contact</th>
+                                <th className="p-4 border-b border-gray-700">Role</th>
+                                <th className="p-4 border-b border-gray-700">Salary (Admin)</th>
+                                <th className="p-4 border-b border-gray-700 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="text-gray-300">
+                            {filteredUsers.map(user => (
+                                <tr key={user.uid} className="hover:bg-white/5 transition-colors">
+                                    <td className="p-4 border-b border-gray-800">
+                                        <div className="font-medium text-white">
+                                            {user.name || user.email?.split('@')[0] || `User ${user.uid.slice(0, 5)}`}
+                                        </div>
+                                        <div className="text-xs text-gray-500 font-mono">{user.uid}</div>
+                                    </td>
+                                    <td className="p-4 border-b border-gray-800">
+                                        <div className="flex flex-col gap-1">
+                                            <div className="flex items-center gap-2 text-sm">
+                                                <Mail className="w-3 h-3 text-gray-500" />
+                                                {user.email}
+                                            </div>
+                                            {user.phone && (
+                                                <div className="flex items-center gap-2 text-sm text-gray-400">
+                                                    <Phone className="w-3 h-3" />
+                                                    {user.phone}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </td>
+                                    <td className="p-4 border-b border-gray-800">
+                                        <span className={`px-3 py-1 rounded-full text-xs font-medium border
+                                            ${user.role === 'Admin' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
+                                                user.role === 'Manager' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
+                                                    user.role === 'HR' ? 'bg-pink-500/10 text-pink-400 border-pink-500/20' :
+                                                        user.role === 'Driver' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' :
+                                                            'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                                            }`}
+                                        >
+                                            <div className="flex items-center gap-1">
+                                                <Shield className="w-3 h-3" />
+                                                {user.role}
+                                            </div>
+                                        </span>
+                                    </td>
+                                    <td className="p-4 border-b border-gray-800 font-mono text-green-400">
+                                        {user.salary ? `$${user.salary.toLocaleString()}` : '-'}
+                                    </td>
+                                    <td className="p-4 border-b border-gray-800 text-right">
+                                        <button
+                                            onClick={() => openEditModal(user)}
+                                            className="px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 rounded transition-colors flex items-center gap-2 ml-auto"
+                                        >
+                                            <Edit2 className="w-3 h-3" /> Edit
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+
+                    {filteredUsers.length === 0 && (
+                        <div className="text-center py-8 text-gray-500">
+                            No users found matching "{searchTerm}"
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* EDIT MODAL */}
+            {isModalOpen && (
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-gray-900 border border-gray-700 rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+                        {/* Modal Header */}
+                        <div className="bg-gray-800/50 p-4 border-b border-gray-700 flex justify-between items-center">
+                            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                <Edit2 className="w-4 h-4 text-blue-400" /> Edit User
+                            </h3>
+                            <button onClick={closeEditModal} className="text-gray-400 hover:text-white transition-colors">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div className="p-6 space-y-4">
+                            {/* Name */}
+                            <div>
+                                <label className="block text-gray-400 text-sm mb-1">Full Name</label>
+                                <input
+                                    type="text"
+                                    value={formData.name}
+                                    onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                    className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white focus:border-blue-500 focus:outline-none"
+                                />
+                            </div>
+
+                            {/* Phone */}
+                            <div>
+                                <label className="block text-gray-400 text-sm mb-1">Phone</label>
+                                <input
+                                    type="text"
+                                    value={formData.phone}
+                                    onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                                    className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-white focus:border-blue-500 focus:outline-none"
+                                    placeholder="+60..."
+                                />
+                            </div>
+
+                            {/* Role (Radio/Select) */}
+                            <div>
+                                <label className="block text-gray-400 text-sm mb-2">Role Permissions</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {roles.map(r => (
+                                        <button
+                                            key={r}
+                                            onClick={() => setFormData({ ...formData, role: r })}
+                                            className={`px-3 py-2 rounded text-sm text-center border transition-all ${formData.role === r
+                                                ? 'bg-blue-600 border-blue-500 text-white shadow-lg'
+                                                : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700'
+                                                }`}
+                                        >
+                                            {r}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Salary (Sensitive) */}
+                            <div>
+                                <label className="block text-red-300 text-sm mb-1 font-bold flex items-center gap-1">
+                                    <DollarSign className="w-3 h-3" /> Monthly Salary (Admin Only)
+                                </label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                                    <input
+                                        type="number"
+                                        value={formData.salary}
+                                        onChange={e => setFormData({ ...formData, salary: parseFloat(e.target.value) || 0 })}
+                                        className="w-full bg-gray-900 border border-red-500/30 rounded p-2 pl-7 text-green-400 font-mono focus:border-red-500 focus:outline-none"
+                                    />
+                                </div>
+                                <p className="text-xs text-gray-500 mt-1">Visible only to Admins. Protected by Firestore Rules.</p>
+                            </div>
+
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="p-4 bg-gray-800/50 border-t border-gray-700 flex justify-end gap-3">
+                            <button
+                                onClick={closeEditModal}
+                                className="px-4 py-2 rounded text-gray-400 hover:bg-gray-700 hover:text-white transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSaveUser}
+                                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded shadow-lg shadow-blue-600/20 flex items-center gap-2"
+                            >
+                                <Save className="w-4 h-4" /> Save Changes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Admin Tools Hidden/Removed (No longer using Firestore Migration) */}
+            {currentUser?.role === 'Admin' && (
+                <div className="mt-8 pt-8 border-t border-gray-700">
+                    <p className="text-gray-500 text-sm">System running on Supabase (All-in).</p>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default UserManagement;

@@ -1,0 +1,80 @@
+id,sku,name,type,current_stock,unit,created_at
+62508b7c-bfdb-4cbf-b584-aaae7a3ec2bb,BW20CM-1,Bubble Wrap Single Layer Clear 20cm x 100m (1 unit),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+7b7a91f8-2ca6-4ba0-82eb-e73375b88937,BW20CM-2,Bubble Wrap Single Layer Clear 20cm x 100m (2 units),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+89810d71-cb86-4653-9517-2f495158ab33,BW20CM-3,Bubble Wrap Single Layer Clear 20cm x 100m (3 units),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+9e0321b1-0fce-47a0-8457-e51c9c395e6f,BW20CM-4,Bubble Wrap Single Layer Clear 20cm x 100m (4 units),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+da34d844-81e6-4c13-9e79-963b4f9f017f,BW20CM-5,Bubble Wrap Single Layer Clear 20cm x 100m (5 units),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+cba63592-290c-4f38-85d5-019df4ed2f5b,BW20CM-BLACK-1,Bubble Wrap Single Layer Black 20cm x 100m (1 unit),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+fb8c9a0f-891e-4782-bbcd-e4cd406f3e02,BW20CM-BLACK-2,Bubble Wrap Single Layer Black 20cm x 100m (2 unit),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+f9c8bf61-09f7-41da-9a5c-fd0870703b2e,BW20CM-BLACK-3,Bubble Wrap Single Layer Black 20cm x 100m (3 unit),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+a530995c-2de3-48eb-87b3-4ae1f43b6cbc,BW20CM-BLACK-4,Bubble Wrap Single Layer Black 20cm x 100m (4 unit),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+db74a64f-b926-478d-bd86-f153ca69b99a,BW20CM-BLACK-5,Bubble Wrap Single Layer Black 20cm x 100m (5 unit),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+bb4ecf1b-1a89-4fd2-8d36-1b75356208be,BW20CM-DOUBLELAYER-1,Bubble Wrap Double Layer Clear 20cm x 100m (1 unit),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+3b6768f7-1e3a-4716-ab24-39a8a4526bd1,BW20CM-DOUBLELAYER-2,Bubble Wrap Double Layer Clear 20cm x 100m (2 unit),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+9c671743-6945-456c-8db7-59a9392f8ee2,BW20CM-DOUBLELAYER-3,Bubble Wrap Double Layer Clear 20cm x 100m (3 unit),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+7c74cce2-b651-420b-b3c8-2ed8dc5ba81a,BW20CM-DOUBLELAYER-4,Bubble Wrap Double Layer Clear 20cm x 100m (4 unit),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+2ab94d80-48ab-4e7d-bc83-ce0b15a13216,BW20CM-DOUBLELAYER-5,Bubble Wrap Double Layer Clear 20cm x 100m (5 unit),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+42588130-8207-4a33-bbf7-cafe5a781506,BW25CM-1,Bubble Wrap Single Layer Clear 25cm x 100m (1 unit),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+aeabad39-927c-4997-8486-37b50fab2446,BW25CM-2,Bubble Wrap Single Layer Clear 25cm x 100m (2 units),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+2625edcb-c131-4027-ab6d-9363982edcee,BW25CM-3,Bubble Wrap Single Layer Clear 25cm x 100m (3 units),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+d4b3f7da-d35b-4d4e-b99c-aec7e2199e40,BW25CM-4,Bubble Wrap Single Layer Clear 25cm x 100m (4 units),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+7f83e59f-8a9a-4213-a2d0-da5f866d5c80,BW25CM-BLACK-1,Bubble Wrap Single Layer Black 25cm x 100m (1 unit),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+6e3cdab8-9d9e-4287-961e-f8d7a90804cb,BW25CM-BLACK-2,Bubble Wrap Single Layer Black 25cm x 100m (2 units),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+97740915-5ec3-41bc-bb21-df36a678f545,BW25CM-BLACK-3,Bubble Wrap Single Layer Black 25cm x 100m (3 units),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+1f4fffaf-4780-47f4-a430-795fa593c948,BW25CM-BLACK-4,Bubble Wrap Single Layer Black 25cm x 100m (4 units),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+ddfa219c-f326-4600-83b3-438fff0db2c8,BW25CM-BLACK-DOUBLELAYER-1,Bubble Wrap Double Layer Black 25cm x 100m (1 unit),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+9c8b96b6-ef56-49d0-98af-ca56550a26b1,BW25CM-BLACK-DOUBLELAYER-2,Bubble Wrap Double Layer Black 25cm x 100m (2 units),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+006cdba2-106c-4fd9-9673-9cad67850f4a,BW25CM-BLACK-DOUBLELAYER-3,Bubble Wrap Double Layer Black 25cm x 100m (3 units),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+247a6d1f-fb91-4c3d-b290-effbc0944d05,BW25CM-BLACK-DOUBLELAYER-4,Bubble Wrap Double Layer Black 25cm x 100m (4 units),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+fd1fd415-010e-4c43-b506-967f7c320577,BW25CM-DOUBLELAYER-1,Bubble Wrap Double Layer Clear 25cm x 100m (1 unit),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+dd9eb492-2a08-4cbf-8831-ff0883617dcc,BW25CM-DOUBLELAYER-2,Bubble Wrap Double Layer Clear 25cm x 100m (2 units),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+c79c954c-7b76-4a18-9303-9ba036a0fdd9,BW25CM-DOUBLELAYER-3,Bubble Wrap Double Layer Clear 25cm x 100m (3 units),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+1e0a56d8-1dbd-4be0-be4b-3e8dcdfe76c0,BW25CM-DOUBLELAYER-4,Bubble Wrap Double Layer Clear 25cm x 100m (4 units),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+ea4ac023-99b1-4ed0-8dd6-f0514fd9d195,BW33CM-1,Bubble Wrap Single Layer Clear 33cm x 100m (1 unit),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+57b2b61a-40df-4501-ac71-30b7fc2f10bc,BW33CM-2,Bubble Wrap Single Layer Clear 33cm x 100m (2 units),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+dd06a6fd-094d-4ab9-b828-70c52b18e2d3,BW33CM-3,Bubble Wrap Single Layer Clear 33cm x 100m (3 units),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+2f6728ca-30fb-4912-bde4-82aabbccd60d,BW33CM-BLACK-1,Bubble Wrap Single Layer Black 33cm x 100m (1 unit),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+ba42bc45-cc6d-4bf4-a062-ad965efd0815,BW33CM-BLACK-2,Bubble Wrap Single Layer Black 33cm x 100m (2 units),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+33546ae0-9e4b-4435-9d03-69e9cd9ec9d4,BW33CM-BLACK-3,Bubble Wrap Single Layer Black 33cm x 100m (3 units),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+d184c60f-9fb2-43a0-8629-7394a66cab17,BW33CM-DOUBLELAYER-1,Bubble Wrap Double Layer Clear 33cm x 100m (1 unit),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+f72cea83-bf88-4736-b363-bad6221ddbc4,BW33CM-DOUBLELAYER-2,Bubble Wrap Double Layer Clear 33cm x 100m (2 units),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+de7b9ebd-96fb-4600-b535-73f9adae971c,BW33CM-DOUBLELAYER-3,Bubble Wrap Double Layer Clear 33cm x 100m (3 units),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+1a7a0eff-ff0e-4a70-895b-9d3f24909e52,BW33CM-DOUBLELAYER-BLACK-1,Bubble Wrap Double Layer Black 33cm x 100m (1 unit),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+ccf74765-934d-42f0-84c5-ededd652649c,BW33CM-DOUBLELAYER-BLACK-2,Bubble Wrap Double Layer Black 33cm x 100m (2 units),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+f144eb2e-7b7f-44eb-99b2-23979623ee30,BW33CM-DOUBLELAYER-BLACK-3,Bubble Wrap Double Layer Black 33cm x 100m (3 units),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+011a7265-8bb5-470d-954b-0989c82d2caa,BW-BLACK,Bubble Wrap Single Layer Black 1m x 100m (HITAM FULL),product,0,Roll,2025-12-23T14:08:07.21877+00:00
+7d3a8bab-21bc-40d6-ae2f-431890d55236,BW-BLACK-50CM-1,Bubble Wrap Single Layer Black 50cm x 100m (1 unit),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+80b02dde-4764-4f28-8c19-4da38ab52b3e,BW-BLACK-50CM-2,Bubble Wrap Single Layer Black 50cm x 100m (2units) (HITAM HALF),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+c6c82b8a-1d59-4d1d-a6c1-469080187ac9,BW-CLEAR,Bubble Wrap Single Layer Clear 1m x 100m (MERAH),product,0,Roll,2025-12-23T14:08:07.21877+00:00
+98317e1e-ded0-43b7-a81f-c132f1c5c304,BW-CLEAR-50CM-1,Bubble Wrap Single Layer Clear 50cm x 100m (1 unit),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+ddced1cf-c4ac-48c1-8435-161fd167044a,BW-CLEAR-50CM-2,Bubble Wrap Single Layer Clear 50cm x 100m (2 units) (OREN),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+18be6a02-637e-425e-882e-635272f94186,BW-DOUBLELAYER-50CM-1,Bubble Wrap Double Layer Clear 50cm x 100m (1 unit),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+b3808fc5-306c-4353-9eb8-139b16143161,BW-DOUBLELAYER-50CM-2,Bubble Wrap Double Layer Clear 50cm x 100m (2 units) (DL HALF),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+03081c66-9315-4b11-8d93-6d084981826d,BW-DOUBLELAYER-BLACK,Bubble Wrap Double Layer Black 1m x 100m (DL FULL HITAM ),product,0,Roll,2025-12-23T14:08:07.21877+00:00
+893e6687-a9ee-4042-8389-74c002855b89,BW-DOUBLELAYERBLACK-50CM-1,Bubble Wrap Double Layer Black 50cm x 100m (1 unit),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+b2d925ea-5171-4340-8a23-6bcece6903aa,BW-DOUBLELAYERBLACK-50CM-2,Bubble Wrap Double Layer Black 50cm x 100m (2 units) (DL HALF),product,0,Unit,2025-12-23T14:08:07.21877+00:00
+62133a64-f300-49fe-b981-9e545858dfe0,BW-DOUBLELAYER-CLEAR,Bubble Wrap Double Layer Clear 1m x 100m (DL FULL),product,0,Roll,2025-12-23T14:08:07.21877+00:00
+54fa3a9b-42fe-4fde-91a0-d506c574e9a7,BW-SV/GY,Bubble Wrap Single Layer Silver/Grey 1m x 100m (SILVER/GREY),product,0,Roll,2025-12-23T14:08:07.21877+00:00
+41d55379-3060-450b-9403-e2e29e858563,SF-22KG-BLACK,Stretch Film 2.2kg 200core 23Micron (Black),product,0,Roll,2025-12-23T14:08:07.21877+00:00
+a5b7372d-f34c-4d53-8b18-565af64c6f96,SF-22KG-CLEAR,Stretch Film 2.2kg 200Core 23Micron (Clear),product,0,Roll,2025-12-23T14:08:07.21877+00:00
+54bbfe18-c0f7-4b0c-b4f2-a61bad858551,SF-BLACK-SATUKOTAK6ROLL-22,Stretch Film 2.2kg 200core 23Micron (Black) (One Carton Six Rolls),product,0,Carton,2025-12-23T14:08:07.21877+00:00
+74679212-3308-4044-8959-071d5e5796aa,SF-CLEAR-SATUKOTAK6ROLL-22,Stretch Film 2.2kg 200core 23Micron (Clear) (One Carton Six Rolls),product,0,Carton,2025-12-23T14:08:07.21877+00:00
+6fced09d-4b63-40e2-af72-f7fa2ed4e155,SF-GREY-SATUKOTAK6ROLL-22,Stretch Film 2.2kg 200core 23Micron (Silver/Grey) (One Carton Six Rolls),product,0,Carton,2025-12-23T14:08:07.21877+00:00
+34817007-bc70-4301-afdc-f701b9feef59,BABYROLL-BLACK,Baby Roll Mini Stretch Film 100mm x 250gram Protective Film (BLACK),product,0,Roll,2025-12-23T14:08:07.21877+00:00
+32fcc1a9-f1ad-4609-8a54-a74f2f107ae7,BABYROLL-CLEAR,Baby Roll Mini Stretch Film 100mm x 250gram Protective Film (CLEAR),product,0,Roll,2025-12-23T14:08:07.21877+00:00
+60826f4e-4794-43f3-aeab-4acb367a48a1,PROD-BW-SL20-CLR-GRN,Bubble Wrap Single Clear 20cm (5 Rolls) (Green),product,0,roll,2025-12-23T18:12:06.669347+00:00
+c6e942c4-d3f0-4b40-9ca6-8441b3a4d81a,PROD-BW-DL25-CLR-BLU,Bubble Wrap Double Clear 25cm (4 Rolls) (Blue),product,0,roll,2025-12-23T21:55:46.183419+00:00
+5919c1f4-95e4-4bbd-93c6-bf8b33276533,PROD-BW-SL50-CLR-ORG,Bubble Wrap Single Clear 50cm (2 Rolls) (Orange),product,0,roll,2025-12-24T00:08:44.533284+00:00
+abc35064-4164-4ab4-830a-7a2f4c8b0704,PROD-BW-SL50-BLK-PNK,Bubble Wrap Single Black 50cm (2 Rolls) (Pink),product,0,roll,2025-12-24T00:08:51.671625+00:00
+6675e413-2d57-4808-b6e3-8803ad107a4f,PROD-BW-DL50-BLK-GRN,Bubble Wrap Double Black 50cm (2 Rolls) (Green),product,0,roll,2025-12-24T00:10:07.741448+00:00
+1de756d2-3194-43c7-ad38-af27b23d122c,PROD-BW-DL20-BLK-PNK,Bubble Wrap Double Black 20cm (5 Rolls) (Pink),product,0,roll,2025-12-24T00:13:42.340077+00:00
+102afa15-3a73-4b7e-983f-573eb6a1cdce,PROD-BW-DL33-BLK-PNK,Bubble Wrap Double Black 33cm (3 Rolls) (Pink),product,0,roll,2025-12-24T00:14:36.078607+00:00
+3de2236a-ffec-449b-8609-8f77cc0fd21f,RAW-LDPE-MAIN,LDPE Resin (Resin 主料),raw,3784,kg,2025-12-24T05:23:17.736411+00:00
+5539107c-0551-4fe1-a564-2d6fbccdf9a2,PROD-BW-DL20-CLR-BLU,Bubble Wrap Double Clear 20cm (5 Rolls) (Blue),product,195,roll,2025-12-23T18:12:17.167342+00:00
+f512b283-4544-4004-a6a1-de49df4e67c2,PROD-BW-DL100-BLK-PNK,Bubble Wrap Double Black 100cm (1 Roll) (Pink),product,0,roll,2025-12-25T13:25:47.011035+00:00
+82a02282-dea3-47ad-80ef-47e1611be57f,PROD-BW-SL25-CLR-GRN,Bubble Wrap Single Clear 25cm (4 Rolls) (Green),product,4,roll,2025-12-23T23:58:13.481106+00:00
+e4762a9b-5758-4ec0-8d79-40d87c804f3e,RAW-RESIN-MIX,LDPE/LLDPE Resin Mix,raw,4618.3,kg,2025-12-25T15:51:48.688288+00:00
+b9b9b674-c282-40de-ae0e-6fe14702cedc,PROD-BW-DL100-CLR-YEL,Bubble Wrap Double Clear 100cm (1 Roll) (Yellow),product,36,roll,2025-12-23T21:55:24.98733+00:00
+5e8c2c87-7364-43c4-a9b2-5f55e8401478,RAW-MB-BLACK,Black Masterbatch,raw,500,kg,2025-12-24T05:23:17.736411+00:00
+722cee05-68f2-4133-b7c5-11ee6e903f75,RAW-MB-SILVER,Silver/Grey Masterbatch,raw,500,kg,2025-12-24T05:23:17.736411+00:00
+58d914f9-03a0-41b7-ab8f-7ed501adf344,PROD-BW-SL100-CLR-PNK,Bubble Wrap Single Clear 100cm (1 Roll) (Pink),product,206,roll,2025-12-24T00:07:44.519007+00:00

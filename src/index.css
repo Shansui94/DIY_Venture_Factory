@@ -1,0 +1,94 @@
+@import "tailwindcss";
+
+:root {
+  --bg-primary: #121215;
+  /* Soft Charcoal (Was Deep Black) - Easier on eyes */
+  --text-primary: #e4e4e7;
+  /* Zinc-200 (Was Pure White) */
+  --bg-secondary: #1e1e24;
+  /* Slightly lighter surface */
+  --accent-glow: 0 0 20px rgba(59, 130, 246, 0.5);
+  --font-main: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-main);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+  overscroll-behavior-y: none;
+  /* Relaxation Settings */
+  line-height: 1.6;
+  /* More breathing room between lines */
+  letter-spacing: 0.025em;
+  /* Slight spacing spread to prevent clumping */
+  overflow-x: hidden;
+  /* Prevent horizontal scroll "super screen" issue */
+}
+
+/* --- PREMIUM SCROLLBAR --- */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Use thin scrollbar for Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+}
+
+/* --- UTILITIES --- */
+.glass-panel {
+  @apply bg-[#1e1e24]/80 backdrop-blur-xl border border-white/[0.08] shadow-2xl rounded-2xl;
+}
+
+.glass-card {
+  @apply bg-white/[0.04] border border-white/[0.08] rounded-xl p-6 transition-all hover:bg-white/[0.08] hover:border-white/10;
+}
+
+.btn-primary {
+  @apply bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-900/40 hover:shadow-blue-900/60 hover:-translate-y-0.5 transition-all font-bold tracking-wide;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Reset inputs on mobile */
+@media screen and (max-width: 768px) {
+
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
