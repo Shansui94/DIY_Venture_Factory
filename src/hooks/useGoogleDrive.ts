@@ -79,12 +79,12 @@ export function useGoogleDrive() {
     }, [isGapiLoaded, isGisLoaded, tokenClient]);
 
     // 2. Login Flow
-    const login = () => {
+    const connectToDrive = () => {
         if (!tokenClient) return;
         tokenClient.requestAccessToken({ prompt: 'consent' });
     };
 
-    const logout = () => {
+    const disconnectFromDrive = () => {
         const token = localStorage.getItem('gdrive_token');
         if (token && window.google) {
             window.google.accounts.oauth2.revoke(token, () => {
@@ -98,8 +98,8 @@ export function useGoogleDrive() {
     return {
         isReady: isGapiLoaded && isGisLoaded,
         isAuthenticated: !!accessToken,
-        login,
-        logout,
+        connectToDrive,
+        disconnectFromDrive,
         uploadFile,
         listFiles,
         downloadFile,
