@@ -512,7 +512,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
 
 
     // --- DUAL LANE CHECK ---
-    const isDualLane = selectedMachine === 'T1.2-M01' || machineMetadata?.id === 'T1.2-M01' || machineMetadata?.machine_id === 'T1.2-M01';
+    const isDualLane = selectedMachine === 'T1.2-M01' || machineMetadata?.id === 'T1.2-M01';
 
     // TRIGGER FOR PRODUCTION (Pass to Lanes)
     // We need to intercept the lane's attempt to produce and check Operator ID

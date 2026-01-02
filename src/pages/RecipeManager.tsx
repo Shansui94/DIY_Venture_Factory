@@ -39,10 +39,10 @@ const RecipeManager: React.FC = () => {
     }, [selectedProduct]);
 
     const loadMasterData = async () => {
-        // Fetch FG (Finished Goods) and Raw Materials
+        // Fetch Product (Finished Goods) and Raw Materials
         const [fg, raw] = await Promise.all([
-            getV2ItemsByType('FG'),
-            getV2ItemsByType('Raw')
+            getV2ItemsByType('Product'),
+            getV2ItemsByType('Product'),
         ]);
         setProducts(fg);
         setMaterials(raw);
@@ -173,8 +173,8 @@ const RecipeManager: React.FC = () => {
                                 key={prod.sku}
                                 onClick={() => setSelectedProduct(prod)}
                                 className={`w-full text-left p-3 rounded-lg flex justify-between items-center transition-all group ${selectedProduct?.sku === prod.sku
-                                        ? 'bg-purple-500/10 border border-purple-500/50'
-                                        : 'hover:bg-white/5 border border-transparent'
+                                    ? 'bg-purple-500/10 border border-purple-500/50'
+                                    : 'hover:bg-white/5 border border-transparent'
                                     }`}
                             >
                                 <div>
@@ -227,8 +227,8 @@ const RecipeManager: React.FC = () => {
 
                                 {recipes.map(recipe => (
                                     <div key={recipe.recipe_id} className={`p-5 rounded-xl border transition-all ${recipe.is_default
-                                            ? 'border-green-500/30 bg-green-500/5'
-                                            : 'border-white/5 bg-white/[0.02]'
+                                        ? 'border-green-500/30 bg-green-500/5'
+                                        : 'border-white/5 bg-white/[0.02]'
                                         }`}>
                                         <div className="flex justify-between items-start">
                                             <div>
