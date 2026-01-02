@@ -263,11 +263,7 @@ export default function DataManagement() {
         });
     };
 
-    const handleCreateNew = () => {
-        setSelectedItem({ id: 'NEW' });
-        setForm({});
-        setIsDirty(false);
-    };
+
 
 
     // FILTER
