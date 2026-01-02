@@ -78,7 +78,22 @@ export function useGoogleDrive() {
         return () => clearInterval(checkScripts);
     }, [isGapiLoaded, isGisLoaded, tokenClient]);
 
-    // ... (Login Flow) ...
+    // 2. Login Flow
+    const login = () => {
+        if (!tokenClient) return;
+        tokenClient.requestAccessToken({ prompt: 'consent' });
+    };
+
+    const logout = () => {
+        const token = localStorage.getItem('gdrive_token');
+        if (token && window.google) {
+            window.google.accounts.oauth2.revoke(token, () => {
+                console.log('Token revoked');
+            });
+        }
+        localStorage.removeItem('gdrive_token');
+        setAccessToken(null);
+    };
 
     return {
         isReady: isGapiLoaded && isGisLoaded,
