@@ -24,13 +24,15 @@ interface ProductionLaneProps {
     laneId: 'Left' | 'Right' | 'Single';
     machineMetadata: Machine | null;
     user: User | null;
+    operatorId: string | null; // NEW PROP
     activeJob: JobOrder | null;
     onProductionComplete: () => void;
     onBeforeProduce?: () => boolean; // New Prop
     className?: string;
 }
 
-const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata, user, activeJob, onProductionComplete, onBeforeProduce, className }) => {
+const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata, user, operatorId, activeJob, onProductionComplete, onBeforeProduce, className }) => {
+
     // Local State for this Lane
     const [step, setStep] = useState<1 | 2 | 3>(1);
     const [selectedLayer, setSelectedLayer] = useState<ProductLayer>('Single');
@@ -96,15 +98,15 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
             const laneInfo = laneId !== 'Single' ? ` | Lane: ${laneId}` : '';
             const finalNote = (productionNote ? `${productionNote} | ` : '') + `V2 Production: ${v3Sku}${laneInfo}`;
 
-            const machineUuid = machineMetadata?.id || undefined;
-
             const result: any = await executeProductionV3(
                 v3Sku,
                 count,
                 machineUuid,
                 jobId,
-                finalNote
+                finalNote,
+                operatorId || undefined // Pass the PIN operator ID
             );
+
 
             if (result.success) {
                 // Success: Notify parent to refresh logs, but keep user on same screen for rapid entry?
@@ -536,7 +538,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                     <div>
                         <h2 className="text-xl md:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 flex items-center gap-2">
                             <Settings className="text-cyan-400" size={24} />
-                            PRODUCTION CONTROL <span className="text-xs text-gray-500 ml-2 font-mono">v4.3</span>                        </h2>
+                            PRODUCTION CONTROL <span className="text-xs text-gray-500 ml-2 font-mono">v4.4</span>                        </h2>
                         {selectedMachine && (
                             <div className="flex items-center gap-2 mt-1">
                                 <span className="text-green-400 font-mono text-xs uppercase tracking-widest flex items-center gap-1">
@@ -621,6 +623,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                                     laneId="Left"
                                     machineMetadata={machineMetadata}
                                     user={user}
+                                    operatorId={operatorId} // Pass ID
                                     activeJob={activeJob}
                                     onProductionComplete={fetchUserLogs}
                                     onBeforeProduce={handleProductionAttempt}
@@ -629,10 +632,12 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                                     laneId="Right"
                                     machineMetadata={machineMetadata}
                                     user={user}
+                                    operatorId={operatorId} // Pass ID
                                     activeJob={activeJob}
                                     onProductionComplete={fetchUserLogs}
                                     onBeforeProduce={handleProductionAttempt}
                                 />
+
                             </div>
                         ) : (
                             // STANDARD LAYOUT
@@ -640,8 +645,10 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                                 laneId="Single"
                                 machineMetadata={machineMetadata}
                                 user={user}
+                                operatorId={operatorId} // Pass ID
                                 activeJob={activeJob}
                                 onProductionComplete={fetchUserLogs}
+
                                 onBeforeProduce={handleProductionAttempt}
                             />
                         )}

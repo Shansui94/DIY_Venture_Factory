@@ -7,15 +7,18 @@ export const executeProductionV3 = async (
     qty: number,
     machineId?: string,
     jobId?: string,
-    note?: string
+    note?: string,
+    operatorOverride?: string // New Argument
 ) => {
     // Get current user (simple mock or real auth)
     const { data: { user } } = await supabase.auth.getUser();
 
     // CRM-MATCH FIX: The RPC expects sys_users_v2.id, NOT auth.users.id
     // We must resolve the correct ID first
-    let operatorSysId = null;
-    if (user?.id) {
+    let operatorSysId = operatorOverride || null;
+
+    // Only resolve from Auth if no override is provided
+    if (!operatorSysId && user?.id) {
         const { data: profile } = await supabase
             .from('sys_users_v2')
             .select('id')
