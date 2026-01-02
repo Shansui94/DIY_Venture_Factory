@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 // --- TYPES ---
-type TabType = 'items' | 'machines' | 'vehicles' | 'customers' | 'partners' | 'recipes';
+type TabType = 'items' | 'machines' | 'vehicles' | 'customers' | 'partners' | 'recipes' | 'factories';
 
 interface DataItem {
     id: string; // Unified ID for UI
@@ -20,7 +20,8 @@ const TABS = [
     { id: 'vehicles', label: 'Fleet / Vehicles', icon: Truck, color: 'text-orange-400', bg: 'bg-orange-500/10' },
     { id: 'customers', label: 'Customers', icon: Users, color: 'text-green-400', bg: 'bg-green-500/10' },
     { id: 'machines', label: 'Machines', icon: Settings, color: 'text-purple-400', bg: 'bg-purple-500/10' },
-    { id: 'partners', label: 'Suppliers', icon: LayoutGrid, color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
+    { id: 'factories', label: 'Factories / Hubs', icon: LayoutGrid, color: 'text-teal-400', bg: 'bg-teal-500/10' },
+    { id: 'partners', label: 'Suppliers', icon: Users, color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
     { id: 'recipes', label: 'BOM Recipes', icon: FlaskConical, color: 'text-pink-400', bg: 'bg-pink-500/10' },
 ];
 
@@ -70,6 +71,10 @@ export default function DataManagement() {
                 case 'recipes':
                     query = supabase.from('bom_headers_v2').select('*, bom_items_v2(*)').order('created_at', { ascending: false }).limit(50);
                     mapFn = (i) => ({ ...i, id: i.recipe_id, title: i.product_sku, subtitle: `${i.bom_items_v2?.length || 0} Ingredients` });
+                    break;
+                case 'factories':
+                    query = supabase.from('sys_factories_v2').select('*').order('factory_id');
+                    mapFn = (i) => ({ ...i, id: i.factory_id, title: i.name, subtitle: i.location_name });
                     break;
             }
 
@@ -121,6 +126,7 @@ export default function DataManagement() {
                 case 'machines': table = 'sys_machines_v2'; pk = 'machine_id'; break;
                 case 'partners': table = 'crm_partners_v2'; pk = 'partner_id'; break;
                 case 'recipes': table = 'bom_headers_v2'; pk = 'recipe_id'; break;
+                case 'factories': table = 'sys_factories_v2'; pk = 'factory_id'; break;
             }
 
             const payload = { ...form };
@@ -167,6 +173,7 @@ export default function DataManagement() {
                 case 'machines': table = 'sys_machines_v2'; pkField = 'machine_id'; break;
                 case 'partners': table = 'crm_partners_v2'; pkField = 'partner_id'; break;
                 case 'recipes': table = 'bom_headers_v2'; pkField = 'recipe_id'; break;
+                case 'factories': table = 'sys_factories_v2'; pkField = 'factory_id'; break;
             }
 
             const id = form[pkField] || selectedItem.id;
@@ -260,8 +267,8 @@ export default function DataManagement() {
                                 key={item.id}
                                 onClick={() => handleSelect(item)}
                                 className={`w-full text-left p-3 mb-1 rounded-xl border transition-all group ${selectedItem?.id === item.id
-                                        ? 'bg-indigo-600/10 border-indigo-500/30 shadow-lg shadow-indigo-900/10'
-                                        : 'bg-transparent border-transparent hover:bg-white/5'
+                                    ? 'bg-indigo-600/10 border-indigo-500/30 shadow-lg shadow-indigo-900/10'
+                                    : 'bg-transparent border-transparent hover:bg-white/5'
                                     }`}
                             >
                                 <div className="flex justify-between items-start">
@@ -385,6 +392,20 @@ export default function DataManagement() {
                                         <InputGroup label="Machine Name" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
                                         <InputGroup label="Type / Model" value={form.type} onChange={(v) => setForm({ ...form, type: v })} />
                                         <InputGroup label="Factory ID" value={form.factory_id} onChange={(v) => setForm({ ...form, factory_id: v })} />
+                                    </div>
+                                )}
+
+                                {activeTab === 'factories' && (
+                                    <div className="grid grid-cols-2 gap-6">
+                                        <InputGroup label="Factory ID" value={form.factory_id} onChange={(v) => setForm({ ...form, factory_id: v })} disabled={selectedItem.id !== 'NEW'} required />
+                                        <InputGroup label="Factory Name" value={form.name} onChange={(v) => setForm({ ...form, name: v })} required />
+                                        <InputGroup label="Location Name" value={form.location_name} onChange={(v) => setForm({ ...form, location_name: v })} colSpan={2} />
+
+                                        <div className="col-span-2 grid grid-cols-2 gap-6 p-4 bg-white/5 rounded-xl border border-white/5">
+                                            <h4 className="col-span-2 text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-2"><Truck size={12} /> GPS Coordination</h4>
+                                            <InputGroup label="Latitude" type="number" value={form.lat} onChange={(v) => setForm({ ...form, lat: v })} />
+                                            <InputGroup label="Longitude" type="number" value={form.lng} onChange={(v) => setForm({ ...form, lng: v })} />
+                                        </div>
                                     </div>
                                 )}
 
