@@ -146,7 +146,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 </div>
 
                 <div className="absolute bottom-6 text-center w-full z-10 text-slate-700 text-[10px] tracking-widest uppercase">
-                    System v4.2 • PackSecure
+                    System v4.3 • Device Refactor Live
                 </div>
             </div>
         );
