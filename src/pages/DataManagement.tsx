@@ -195,8 +195,80 @@ export default function DataManagement() {
             return;
         }
 
-        // Clean data for export: Remove internal UI fields like 'title', 'subtitle'
+        // CSV Export Logic
+        const csv = Papa.unparse(filteredData.map(({ id, title, subtitle, ...rest }) => ({ id, ...rest })));
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `${activeTab}_export_${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
+
+    // --- IMPORT LOGIC ---
+    const handleImportClick = () => {
+        if (fileInputRef.current) {
+            fileInputRef.current.value = ''; // Reset
+            fileInputRef.current.click();
+        }
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            complete: async (results) => {
+                const rows = results.data;
+                if (!rows || rows.length === 0) {
+                    showToast('CSV is empty or invalid', 'error');
+                    return;
+                }
+
+                if (!confirm(`Ready to import ${rows.length} records into ${activeTab}?`)) return;
+
+                try {
+                    setLoading(true);
+                    let table = '';
+                    switch (activeTab) {
+                        case 'items': table = 'master_items_v2'; break;
+                        case 'vehicles': table = 'sys_vehicles'; break;
+                        case 'customers': table = 'sys_customers'; break;
+                        case 'machines': table = 'sys_machines_v2'; break;
+                        case 'partners': table = 'crm_partners_v2'; break;
+                        case 'recipes': table = 'bom_headers_v2'; break;
+                        case 'factories': table = 'sys_factories_v2'; break;
+                    }
+
+                    // Batch insert/upsert
+                    const { error } = await supabase.from(table).upsert(rows);
+                    if (error) throw error;
+
+                    showToast(`Successfully imported ${rows.length} records`, 'success');
+                    fetchData();
+                } catch (err: any) {
+                    showToast('Import Failed: ' + err.message, 'error');
+                } finally {
+                    setLoading(false);
+                }
+            },
+            error: (err) => {
+                showToast('CSV Parse Error: ' + err.message, 'error');
+            }
+        });
+    };
+
+    const handleCreateNew = () => {
+        setSelectedItem({ id: 'NEW' });
+        setForm({});
+        setIsDirty(false);
+    };
+
 
     // FILTER
     const filteredData = useMemo(() => {
