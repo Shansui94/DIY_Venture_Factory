@@ -16,7 +16,7 @@ import DriverDelivery from './pages/DriverDelivery';
 import Dispatch from './pages/Dispatch';
 import MachineLabels from './pages/MachineLabels';
 import ExecutiveReports from './pages/ExecutiveReports';
-// import DataManagement from './pages/DataManagement';
+import DataManagement from './pages/DataManagement';
 import ReportHistory from './pages/ReportHistory';
 import UnderConstruction from './pages/UnderConstruction';
 import ClaimsManagement from './pages/ClaimsManagement';
@@ -581,9 +581,9 @@ function App() {
             case 'dispatch':
                 return <Dispatch />;
             case 'data-v2':
-                return <UnderConstruction title="DATA CENTER MAINTENANCE" />; // <DataManagement />;
+                return <DataManagement />;
             case 'admin-data':
-                return <UnderConstruction title="DATA CENTER MAINTENANCE" />; // <DataManagement />;
+                return <DataManagement />;
             case 'scanner':
                 return <ProductionControl user={user as any} jobs={jobs} />;
             case 'report-history':
