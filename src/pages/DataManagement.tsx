@@ -3,7 +3,8 @@ import { supabase } from '../services/supabase';
 import Papa from 'papaparse';
 import {
     Search, Plus, Save, Trash2, Database, Truck, Users,
-    AlertCircle, CheckCircle, X, Download, Upload, Cloud, LogOut, FileText
+    AlertCircle, CheckCircle, X, Download, Upload, Cloud, LogOut, FileText,
+    Package, Settings, LayoutGrid, FlaskConical, ChevronRight
 } from 'lucide-react';
 import { useGoogleDrive } from '../hooks/useGoogleDrive';
 
