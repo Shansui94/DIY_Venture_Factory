@@ -3,6 +3,21 @@ import { createRoot } from 'react-dom/client';
 import './index.css';
 import App from './App';
 
+// --- NUCLEAR ERROR TRAP ---
+window.onerror = function (msg, url, lineNo, columnNo, error) {
+    const errorMsg = `Error: ${msg}\nURL: ${url}\nLine: ${lineNo}\nColumn: ${columnNo}\nStack: ${error?.stack}`;
+    console.error(errorMsg);
+    // Force display on page if React fails
+    if (!document.getElementById('nuclear-error')) {
+        const div = document.createElement('div');
+        div.id = 'nuclear-error';
+        div.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:black;color:red;z-index:999999;padding:20px;white-space:pre-wrap;font-family:monospace;overflow:auto;';
+        div.innerText = '🔥 APPLICATION DIED BEFORE BOOT 🔥\n\n' + errorMsg;
+        document.body.appendChild(div);
+    }
+    return false;
+};
+
 // Simple Error Boundary to catch crash and show it to user
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean, error: Error | null }> {
     constructor(props: { children: ReactNode }) {
