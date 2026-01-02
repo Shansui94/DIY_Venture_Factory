@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../services/supabase';
 import Papa from 'papaparse';
 import {
     Search, Plus, Save, Trash2, Database, Truck, Users,
     Package, Settings, Box, ChevronRight, LayoutGrid, FlaskConical,
-    AlertCircle, CheckCircle, X, Download
+    AlertCircle, CheckCircle, X, Download, Upload
 } from 'lucide-react';
 
 // --- TYPES ---
@@ -38,6 +38,7 @@ export default function DataManagement() {
 
     // NOTIFICATION
     const [notification, setNotification] = useState<{ msg: string, type: 'success' | 'error' } | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // 1. FETCH DATA
     const fetchData = async () => {
@@ -193,27 +194,6 @@ export default function DataManagement() {
             }
 
             // Clean data for export: Remove internal UI fields like 'title', 'subtitle'
-            const exportData = filteredData.map(item => {
-                const { title, subtitle, bom_items_v2, ...rest } = item;
-                return rest;
-            });
-
-            const csv = Papa.unparse(exportData);
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', `${activeTab}_export_${new Date().toISOString().split('T')[0]}.csv`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            showToast('Export Successful', 'success');
-        };
-
-        // UTILS
-        const showToast = (msg: string, type: 'success' | 'error') => {
-            setNotification({ msg, type });
-            setTimeout(() => setNotification(null), 3000);
         };
 
         // FILTER
@@ -274,7 +254,16 @@ export default function DataManagement() {
 
                     <div className="flex-1 overflow-y-auto p-2 scrollbar-thin scrollbar-thumb-gray-800">
 
-                        <div className="flex gap-2 mb-2">
+                        <div className="flex gap-2 mb-2 px-1">
+                            {/* Hidden File Input */}
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                onChange={handleFileChange}
+                                accept=".csv"
+                                className="hidden"
+                            />
+
                             <button
                                 onClick={handleCreateNew}
                                 className="flex-1 p-3 rounded-xl border border-dashed border-white/10 hover:border-indigo-500/50 hover:bg-indigo-500/5 text-gray-400 hover:text-indigo-400 text-sm font-bold flex items-center justify-center gap-2 transition-all"
@@ -284,9 +273,16 @@ export default function DataManagement() {
                             <button
                                 onClick={handleExport}
                                 className="p-3 rounded-xl border border-dashed border-white/10 hover:border-green-500/50 hover:bg-green-500/5 text-gray-400 hover:text-green-400 text-sm font-bold flex items-center justify-center gap-2 transition-all"
-                                title="Export to Excel (CSV)"
+                                title="Export CSV"
                             >
                                 <Download size={16} />
+                            </button>
+                            <button
+                                onClick={handleImportClick}
+                                className="p-3 rounded-xl border border-dashed border-white/10 hover:border-orange-500/50 hover:bg-orange-500/5 text-gray-400 hover:text-orange-400 text-sm font-bold flex items-center justify-center gap-2 transition-all"
+                                title="Import CSV"
+                            >
+                                <Upload size={16} />
                             </button>
                         </div>
 
