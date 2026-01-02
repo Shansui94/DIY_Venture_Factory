@@ -46,7 +46,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
 
     const NavItem = ({ id, icon: Icon, label, roles }: { id: string, icon: any, label: string, roles?: string[] }) => {
         // SuperAdmin implies access to everything, overriding specific role checks
-        if (userRole !== 'SuperAdmin' && roles && userRole && !roles.includes(userRole)) return null;
+        const isSuperAdmin = userRole === 'SuperAdmin' || user?.employeeId === '001';
+        if (!isSuperAdmin && roles && userRole && !roles.includes(userRole)) return null;
 
         const isActive = activePage === id;
 
@@ -123,7 +124,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
 
                     {/* Navigation Links */}
                     <nav className="flex-1 overflow-y-auto px-4 custom-scrollbar space-y-2 pb-6">
-                        {/* SUPER ADMIN / MANAGER / ADMIN VIEW */}
+                        {/* EXECUTIVE SUITE (SuperAdmin, Admin, Manager) */}
                         {(userRole === 'SuperAdmin' || userRole === 'Admin' || userRole === 'Manager' || user?.employeeId === '001') && (
                             <>
                                 <NavGroup title="Executive Suite">
