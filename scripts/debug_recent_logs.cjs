@@ -13,24 +13,13 @@ if (!supabaseUrl || !supabaseKey) {
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function check() {
-    console.log("Checking schema...");
-    const { data, error } = await supabase
-        .rpc('get_column_type', { table_n: 'sys_users_v2', col_n: 'id' });
-    // Note: RPC might not exist. 
-    // Fallback to raw SQL via a different method? 
-    // Supabase client doesn't support raw SQL easily without RPC.
-    // Let's just assume UUID if I can't check easily.
-    // Or check a sample ID string in the logs/console.
-
-    // ACTUALLY: Let's just fetch one user and print the ID.
-    const { data: users } = await supabase.from('sys_users_v2').select('id').limit(1);
-    console.log("Sample User ID:", users ? users[0] : 'None');
-
+    console.log("Checking machines...");
+    const { data: machines, error } = await supabase.from('sys_machines_v2').select('machine_id, id, name');
 
     if (error) {
         console.error("Error:", error);
     } else {
-        console.table(data);
+        console.table(machines);
     }
 }
 

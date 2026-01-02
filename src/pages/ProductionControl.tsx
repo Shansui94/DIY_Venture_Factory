@@ -98,6 +98,10 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
             const laneInfo = laneId !== 'Single' ? ` | Lane: ${laneId}` : '';
             const finalNote = (productionNote ? `${productionNote} | ` : '') + `V2 Production: ${v3Sku}${laneInfo}`;
 
+            // Restore machineUuid definition (fixing previous deletion)
+            // Prioritize machine_id (Code) as that's what we likely store in logs
+            const machineUuid = machineMetadata?.machine_id || machineMetadata?.id || undefined;
+
             const result: any = await executeProductionV3(
                 v3Sku,
                 count,
@@ -538,7 +542,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                     <div>
                         <h2 className="text-xl md:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 flex items-center gap-2">
                             <Settings className="text-cyan-400" size={24} />
-                            PRODUCTION CONTROL <span className="text-xs text-gray-500 ml-2 font-mono">v4.5</span>                        </h2>
+                            PRODUCTION CONTROL <span className="text-xs text-gray-500 ml-2 font-mono">v4.6</span>                        </h2>
                         {selectedMachine && (
                             <div className="flex items-center gap-2 mt-1">
                                 <span className="text-green-400 font-mono text-xs uppercase tracking-widest flex items-center gap-1">
