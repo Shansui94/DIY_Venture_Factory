@@ -538,7 +538,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                     <div>
                         <h2 className="text-xl md:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 flex items-center gap-2">
                             <Settings className="text-cyan-400" size={24} />
-                            PRODUCTION CONTROL <span className="text-xs text-gray-500 ml-2 font-mono">v4.4</span>                        </h2>
+                            PRODUCTION CONTROL <span className="text-xs text-gray-500 ml-2 font-mono">v4.5</span>                        </h2>
                         {selectedMachine && (
                             <div className="flex items-center gap-2 mt-1">
                                 <span className="text-green-400 font-mono text-xs uppercase tracking-widest flex items-center gap-1">
@@ -656,7 +656,10 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                         {/* LOGS */}
                         <div className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
                             <div className="px-4 py-3 border-b border-white/5 bg-black/20 flex justify-between items-center">
-                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Recent Activity</h4>
+                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                                    Recent Activity
+                                    {operatorId && <span className="ml-2 text-[9px] text-gray-600 font-mono">({operatorId.slice(0, 4)})</span>}
+                                </h4>
                                 <span className="text-[10px] text-cyan-500 font-mono">{recentLogs.length} Records</span>
                             </div>
                             <div className="max-h-48 overflow-y-auto custom-scrollbar">
