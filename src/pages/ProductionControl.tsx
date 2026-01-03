@@ -100,7 +100,7 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
 
             // Restore machineUuid definition (fixing previous deletion)
             // Prioritize machine_id (Code) as that's what we likely store in logs
-            const machineUuid = machineMetadata?.machine_id || machineMetadata?.id || undefined;
+            const machineUuid = machineMetadata?.id || undefined;
 
             const result: any = await executeProductionV3(
                 v3Sku,
@@ -220,7 +220,7 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
                             {PRODUCT_SIZES.map(size => (
                                 <button
                                     key={size.value}
-                                    onClick={() => handleSizeSelect(size.value)}
+                                    onClick={() => handleSizeSelect(size.value as ProductSize)}
                                     className="relative group bg-gray-800/60 hover:bg-cyan-900/40 border-2 border-white/10 hover:border-cyan-400 rounded-2xl py-6 flex flex-col items-center gap-1 active:scale-95 transition-all"
                                 >
                                     <span className="text-3xl font-black text-white">{size.label.replace(/[^0-9]/g, '')}</span>
