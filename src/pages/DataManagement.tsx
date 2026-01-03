@@ -42,6 +42,13 @@ export default function DataManagement() {
     const [driveFiles, setDriveFiles] = useState<any[]>([]);
     const [showDrivePicker, setShowDrivePicker] = useState(false);
     const [driveLoading, setDriveLoading] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [notification, setNotification] = useState<{ msg: string, type: 'success' | 'error' } | null>(null);
+
+    const showToast = (msg: string, type: 'success' | 'error') => {
+        setNotification({ msg, type });
+        setTimeout(() => setNotification(null), 3000);
+    };
 
     // ... (fetchData) ...
 
