@@ -1,22 +1,24 @@
 
-// CommonJS Handler for Vercel
-// Uses internal fetch (Node 18+)
-// Saved as .cjs to bypass package.json "type": "module"
+export const config = {
+    runtime: 'edge',
+};
 
-module.exports = async function handler(req, res) {
-    // Enable CORS
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+export default async function handler(req) {
+    // CORS Headers
+    const headers = {
+        'Access-Control-Allow-Credentials': 'true',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET,OPTIONS,PATCH,DELETE,POST,PUT',
+        'Access-Control-Allow-Headers': 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version',
+        'Content-Type': 'application/json'
+    };
 
     if (req.method === 'OPTIONS') {
-        res.status(200).end();
-        return;
+        return new Response(null, { status: 200, headers });
     }
 
     if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Method Not Allowed' });
+        return new Response(JSON.stringify({ error: 'Method Not Allowed' }), { status: 405, headers });
     }
 
     try {
@@ -27,14 +29,13 @@ module.exports = async function handler(req, res) {
             throw new Error('Missing Supabase Env Vars');
         }
 
-        const { machine_id, alarm_count } = req.body;
+        const { machine_id, alarm_count } = await req.json();
+
         if (!machine_id) {
-            return res.status(400).json({ error: 'machine_id is required' });
+            return new Response(JSON.stringify({ error: 'machine_id is required' }), { status: 400, headers });
         }
 
-        console.log(`[Cloud CJS] Alarm from ${machine_id}`);
-
-        // 1. Get Active Product (Native Fetch)
+        // 1. Get Active Product (Fetch)
         let productSku = 'UNKNOWN';
         try {
             const queryUrl = `${supabaseUrl}/rest/v1/machine_active_products?machine_id=eq.${machine_id}&select=product_sku`;
@@ -44,7 +45,7 @@ module.exports = async function handler(req, res) {
                     'apikey': supabaseKey,
                     'Authorization': `Bearer ${supabaseKey}`,
                     'Content-Type': 'application/json',
-                    'Accept': 'application/vnd.pgrst.object+json'
+                    'Accept': 'application/vnd.pgrst.object+json' // Expect object, not array
                 }
             });
 
@@ -54,11 +55,11 @@ module.exports = async function handler(req, res) {
                     productSku = data.product_sku;
                 }
             }
-        } catch (err) {
-            console.error("Fetch Product Error:", err);
+        } catch (e) {
+            console.error("Product fetch failed", e);
         }
 
-        // 2. Insert Log
+        // 2. Insert Log (Fetch)
         const postUrl = `${supabaseUrl}/rest/v1/production_logs`;
         const postResp = await fetch(postUrl, {
             method: 'POST',
@@ -76,23 +77,21 @@ module.exports = async function handler(req, res) {
         });
 
         if (!postResp.ok) {
-            const errorText = await postResp.text();
-            throw new Error(`Supabase Insert Failed: ${postResp.status} - ${errorText}`);
+            throw new Error(`DB Insert Failed: ${postResp.status}`);
         }
 
-        const responseData = await postResp.json();
-        res.status(200).json({
+        const result = await postResp.json();
+
+        return new Response(JSON.stringify({
             status: 'ok',
-            message: 'Logged via CJS Fetch',
-            product: productSku,
-            data: responseData
-        });
+            message: 'Logged via Edge Runtime',
+            product: productSku
+        }), { status: 200, headers });
 
     } catch (e) {
-        console.error("Handler Error:", e);
-        res.status(500).json({
+        return new Response(JSON.stringify({
             error: e.message,
             stack: e.stack
-        });
+        }), { status: 500, headers });
     }
-};
+}
