@@ -50,6 +50,7 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
     // Live Run State
     const [isLiveRun, setIsLiveRun] = useState(false);
     const [liveCount, setLiveCount] = useState(0);
+    const [activeSku, setActiveSku] = useState<string | null>(null); // NEW: Track SKU
 
     // STEP 1 HANDLER
     const handleTypeSelect = (layer: ProductLayer, material: ProductMaterial) => {
@@ -67,16 +68,26 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
         // Reset Live State on new selection
         setIsLiveRun(false);
         setLiveCount(0);
+        setActiveSku(null);
     };
 
     // STEP 3 HANDLER: TOGGLE RUN
     const toggleProductionRun = async () => {
         if (isLiveRun) {
             // STOP
+            // STOP
+            try {
+                const machineId = machineMetadata?.id || 'T1.2-M01';
+                const dbLaneId = laneId;
+                await supabase.from('machine_active_products')
+                    .delete()
+                    .eq('machine_id', machineId)
+                    .eq('lane_id', dbLaneId);
+            } catch (err) {
+                console.error("Failed to clear active product:", err);
+            }
             setIsLiveRun(false);
-            // Optionally clear active product in DB or keep it?
-            // User likely just wants to stop matching counts to this specific run session locally.
-            // Backend keeps "last set" product until changed.
+            setActiveSku(null);
         } else {
             // START
             // PRE-CHECK: Operator Login
@@ -90,26 +101,26 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
             const v3Sku = getBubbleWrapSku(selectedLayer, selectedMaterial, selectedSize);
 
             try {
-                // 1. Tell Backend we are now producing this SKU
-                // Send to Backend (Serverless or Local)
-                try {
-                    // Use relative path so it works on Vercel and Local (via Vite Proxy)
-                    await fetch('/api/set-product', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            machine_id: 'T1.2-M01', // Hardcoded for single machine setup
-                            product_sku: v3Sku
-                        })
-                    });
-                    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                } catch (e) {
-                    console.error("Failed to update active product", e);
-                }
+                // 1. Tell Backend we are now producing this SKU (Direct DB Mode)
+                const machineId = machineMetadata?.id || 'T1.2-M01';
+
+                // Determine Lane ID (Map frontend 'Single'/'Left'/'Right' to DB expectations)
+                // DB expects: 'Single', 'Left', 'Right'
+                const dbLaneId = laneId;
+
+                const { error } = await supabase.from('machine_active_products').upsert({
+                    machine_id: machineId,
+                    lane_id: dbLaneId,
+                    product_sku: v3Sku,
+                    updated_at: new Date()
+                });
+
+                if (error) throw error;
 
                 // 2. Set Local State
                 setIsLiveRun(true);
                 setLiveCount(0); // Reset session count
+                setActiveSku(v3Sku); // Store SKU for filtering
 
             } catch (error: any) {
                 console.error("Failed to start run:", error);
@@ -120,28 +131,35 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
 
     // LIVE COUNT SUBSCRIPTION
     useEffect(() => {
+        if (!isLiveRun || !activeSku) return;
+
         const start = Date.now();
-        console.log(`[Lane: ${laneId}] [${start}] Effect Triggered. isLiveRun: ${isLiveRun}`);
+        const machineId = machineMetadata?.id || 'T1.2-M01'; // Get ID for filtering
+        console.log(`[Lane: ${laneId}] [${start}] Effect Triggered. isLiveRun: ${isLiveRun}, SKU: ${activeSku}`);
 
-        if (!isLiveRun) return;
-
-        // DIAGNOSTIC: Check if we can actually READ the table
-        supabase.from('production_logs').select('id, machine_id').limit(1)
-            .then(({ data, error }) => {
-                console.log(`[Lane: ${laneId}] RLS Check:`, error ? 'FAIL' : 'PASS', error || data);
-            });
-
-        const channelName = `prod-ctrl-${laneId}`; // Simple static name
+        const channelName = `prod-ctrl-${laneId}-${Date.now()}`; // Unique channel
         console.log(`[Lane: ${laneId}] Subscribing to: ${channelName}`);
 
         const channel = supabase.channel(channelName)
             .on('postgres_changes',
                 { event: 'INSERT', schema: 'public', table: 'production_logs' },
                 (payload) => {
-                    console.log(`[Lane: ${laneId}] [${Date.now()}] ⚡ SIGNAL RECEIVED:`, payload.new);
                     const newLog = payload.new;
-                    setLiveCount(prev => prev + (newLog.alarm_count || 1));
-                    onProductionComplete();
+                    // STRICT FILTERING: Only count if Machine ID AND SKU match!
+                    if (newLog.machine_id === machineId && newLog.product_sku === activeSku) {
+
+                        // NEW: Prevent Double Counting in Dual Lane Mode
+                        // If the log specifies a lane_id, it MUST match this component's laneId.
+                        if (newLog.lane_id && newLog.lane_id !== laneId) {
+                            return; // Ignore logs meant for the other lane
+                        }
+
+                        console.log(`[Lane: ${laneId}] ⚡ MATCHED SIGNAL:`, newLog);
+                        setLiveCount(prev => prev + (newLog.alarm_count || 1));
+                        onProductionComplete();
+                    } else {
+                        // console.log(`[Lane: ${laneId}] Ignored Signal (Mismatch):`, newLog.product_sku);
+                    }
                 }
             )
             .subscribe((status, err) => {
@@ -149,11 +167,9 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
             });
 
         return () => {
-            const end = Date.now();
-            console.log(`[Lane: ${laneId}] [${end}] Cleaning up channel. Duration: ${(end - start)}ms`);
             supabase.removeChannel(channel);
         };
-    }, [isLiveRun]); // Removed machineMetadata dependency
+    }, [isLiveRun, activeSku, machineMetadata, laneId]);
 
     // --- RENDER LANE ---
     return (
@@ -504,38 +520,48 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
 
     // Fetch Logs
     const fetchUserLogs = async () => {
-        if (!operatorId) return;
-        const { data } = await supabase.from('production_logs_v2')
+        // CHANGED: Fetch by Machine ID, not Operator ID, because Firmware/Trigger logs have no Operator ID.
+        // We want to see all production for this machine.
+        const targetMachine = machineMetadata?.id || selectedMachine;
+        if (!targetMachine) return;
+
+        console.log("Fetching logs for machine:", targetMachine);
+
+        const { data } = await supabase.from('production_logs') // Use V1 table (where trigger writes) or V2? Trigger writes to V1 'production_logs'
             .select('*')
-            .eq('operator_id', operatorId)
+            .eq('machine_id', targetMachine)
             .order('created_at', { ascending: false })
             .limit(20);
 
         if (data) {
             const mapped: ProductionLog[] = data.map((log: any) => ({
-                Log_ID: log.log_id,
-                Timestamp: log.created_at || log.start_time,
-                Job_ID: log.job_id,
-                Operator_Email: user?.email || 'Unknown',
-                Output_Qty: log.output_qty || 0,
-                Note: log.note || `V2 Production: ${log.sku}`,
+                Log_ID: log.id, // V1 uses 'id'
+                Timestamp: log.created_at,
+                Job_ID: 'N/A',
+                Operator_Email: 'Machine Auto',
+                Output_Qty: log.alarm_count || 1,
+                Note: log.product_sku || 'Production Log',
             }));
             setRecentLogs(mapped);
         }
     };
 
     useEffect(() => {
-        if (operatorId) {
+        if (selectedMachine) {
             fetchUserLogs();
-            const sub = supabase.channel('my-logs-v2-broad')
-                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'production_logs_v2' },
-                    (payload) => { if (payload.new.operator_id === operatorId) fetchUserLogs(); })
+            const sub = supabase.channel('machine-logs-broad')
+                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'production_logs' },
+                    (payload) => {
+                        if (payload.new.machine_id === (machineMetadata?.id || selectedMachine)) {
+                            fetchUserLogs();
+                        }
+                    })
                 .subscribe();
             return () => { supabase.removeChannel(sub); };
         } else {
             setRecentLogs([]);
         }
-    }, [operatorId]);
+    }, [selectedMachine, machineMetadata]);
 
 
     // --- DUAL LANE CHECK ---

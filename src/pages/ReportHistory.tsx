@@ -64,8 +64,9 @@ const ReportHistory: React.FC<ReportHistoryProps> = ({ user }) => {
             }
 
             // 3. Fetch Logs (No Join)
+            // CHANGED: Use 'production_logs' (V1) where firmware writes
             let query = supabase
-                .from('production_logs_v2')
+                .from('production_logs')
                 .select('*') // No relationship join to avoid FK errors
                 .order('created_at', { ascending: false });
 
@@ -90,20 +91,20 @@ const ReportHistory: React.FC<ReportHistoryProps> = ({ user }) => {
                 data.forEach((log: any) => {
                     const dateStr = new Date(log.created_at).toLocaleDateString();
                     // Resolve Operator from Map
-                    const opUser = userMap[log.operator_id];
-
-                    const opName = opUser?.name || 'Unknown Operator';
-                    const opEmail = opUser?.email || 'Unknown';
                     const opId = log.operator_id;
+                    const opUser = opId ? userMap[opId] : null;
 
-                    // Composite Key: Date_OperatorID
-                    const uniqueKey = `${dateStr}_${opId}`;
+                    const opName = opUser?.name || (opId ? 'Unknown Operator' : 'Automatic Machine Log');
+                    const opEmail = opUser?.email || 'N/A';
+
+                    // Composite Key: Date_OperatorID (Use 'AUTO' for null operator)
+                    const uniqueKey = `${dateStr}_${opId || 'AUTO'}`;
 
                     if (!groups[uniqueKey]) {
                         groups[uniqueKey] = {
                             key: {
                                 date: dateStr,
-                                operatorId: opId,
+                                operatorId: opId || 'AUTO',
                                 operatorName: opName,
                                 operatorEmail: opEmail
                             },
@@ -112,12 +113,12 @@ const ReportHistory: React.FC<ReportHistoryProps> = ({ user }) => {
                     }
 
                     groups[uniqueKey].logs.push({
-                        Log_ID: log.log_id,
+                        Log_ID: log.id, // V1 uses 'id'
                         Timestamp: log.created_at,
-                        Job_ID: log.job_id,
+                        Job_ID: log.job_id || log.machine_id, // Map machine_id if job_id missing
                         Operator_Email: opEmail,
-                        Output_Qty: log.output_qty || 0,
-                        Note: log.note,
+                        Output_Qty: log.alarm_count || 1, // Map alarm_count
+                        Note: log.product_sku, // Map SKU to Note
                         formattedDate: dateStr
                     } as any);
                 });

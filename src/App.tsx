@@ -14,6 +14,7 @@ import ProductLibrary from './pages/ProductLibrary';
 import DeliveryOrderManagement from './pages/DeliveryOrderManagement';
 import DriverDelivery from './pages/DriverDelivery';
 import Dispatch from './pages/Dispatch';
+import LoadingDock from './pages/LoadingDock';
 import MachineLabels from './pages/MachineLabels';
 import ExecutiveReports from './pages/ExecutiveReports';
 import DataManagement from './pages/DataManagement';
@@ -21,9 +22,13 @@ import ReportHistory from './pages/ReportHistory';
 import UnderConstruction from './pages/UnderConstruction';
 import ClaimsManagement from './pages/ClaimsManagement';
 import UpdatePassword from './pages/UpdatePassword';
+import CustomerImport from './pages/CustomerImport'; // Added Import Page
+import UniversalIntake from './pages/UniversalIntake';
+import FactoryDashboard from './pages/FactoryDashboard';
 
 import { User, UserRole, InventoryItem, ProductionLog as ProductionLogType, JobOrder } from './types';
 import { VoiceCommand } from './components/VoiceCommand';
+import AIAgentWidget from './components/AIAgentWidget';
 import { determineZone } from './utils/logistics';
 import { supabase } from './services/supabase';
 import { Session } from '@supabase/supabase-js';
@@ -90,6 +95,17 @@ function App() {
                     setActivePage('scanner');
                 }
             }
+
+            // 3. Customer Import Deep Link
+            if (hash === '#/customers/import') {
+                setActivePage('customer-import');
+            }
+            if (hash === '#/input' || hash === '#/universal-intake') {
+                setActivePage('universal-intake');
+            }
+            if (hash === '#/factory-dashboard') {
+                setActivePage('factory-dashboard');
+            }
         };
 
         handleHash();
@@ -109,14 +125,14 @@ function App() {
         // Define allowable pages per role
         const allowedPages: Record<string, string[]> = {
             'SuperAdmin': ['*'], // The Only One with Full Access
-            'Admin': ['profile', 'construction'], // Temporarily Restricted
-            'Manager': ['profile', 'construction'], // Temporarily Restricted
+            'Admin': ['profile', 'construction', 'factory-dashboard', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'dispatch', 'loading-dock', 'production', 'report-history', 'users', 'hr', 'claims'],
+            'Manager': ['profile', 'construction', 'factory-dashboard', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'dispatch', 'loading-dock', 'production', 'report-history', 'hr', 'claims'],
             'Driver': ['delivery-driver', 'claims', 'profile'],
             'Operator': ['scanner', 'profile'],
             'Device': ['scanner'],
-            'HR': ['profile', 'construction'], // Temporarily Restricted
-            'Sales': ['profile', 'construction'], // Temporarily Restricted
-            'Finance': ['profile', 'construction'] // Temporarily Restricted
+            'HR': ['profile', 'construction'],
+            'Sales': ['profile', 'construction'],
+            'Finance': ['profile', 'construction']
         };
 
         const allowed = allowedPages[role] || [];
@@ -305,10 +321,7 @@ function App() {
             // Try selecting operator name if possible, else just ID
             const { data, error } = await supabase
                 .from('production_logs_v2')
-                .select(`
-                    *,
-                    sys_users_v2 ( email, name )
-                `)
+                .select('*')
                 .order('created_at', { ascending: false })
                 .limit(100);
 
@@ -580,6 +593,8 @@ function App() {
                 return <DriverDelivery user={user} />;
             case 'dispatch':
                 return <Dispatch />;
+            case 'loading-dock':
+                return <LoadingDock />;
             case 'data-v2':
                 return <DataManagement />;
             case 'admin-data':
@@ -599,6 +614,12 @@ function App() {
                 return <ClaimsManagement user={user} />;
             case 'update-password':
                 return <UpdatePassword />;
+            case 'customer-import':  // Added Import Page Case
+                return <CustomerImport />;
+            case 'universal-intake':
+                return <UniversalIntake />;
+            case 'factory-dashboard':
+                return <FactoryDashboard />;
             case 'construction':
                 return <UnderConstruction title="Access Restricted" />;
             default:
@@ -626,6 +647,7 @@ function App() {
             <Layout activePage={activePage} setActivePage={setActivePage} userRole={user?.role} user={user} onLogout={handleLogout}>
                 {renderContent()}
                 <VoiceCommand />
+                <AIAgentWidget />
                 <div className="fixed bottom-0 left-0 bg-red-600 text-white font-mono text-[10px] px-2 py-0.5 z-[9999] pointer-events-none">
                     DEPLOY CHECK: v6.6 {new Date().toLocaleTimeString()}
                 </div>

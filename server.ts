@@ -1,5 +1,6 @@
 /* eslint-env node */
-import express, { Request, Response } from 'express';
+import express from 'express';
+import type { Request, Response } from 'express';
 import cors from 'cors';
 import multer from 'multer';
 import { GoogleGenerativeAI } from '@google/generative-ai';
@@ -52,14 +53,15 @@ const app = express();
 const port = process.env.PORT || 8080;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY)!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // --- Google AI Setup (API Key) ---
-const apiKey = process.env.GEMINI_API_KEY!.trim();
+const apiKey = (process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY)!.trim();
 const genAI = new GoogleGenerativeAI(apiKey);
 
 // Tool Definitions
@@ -126,6 +128,207 @@ app.post('/api/analyze-image', upload.single('image'), async (req: Request, res:
     } catch (e: any) {
         console.error("Analysis Error:", e);
         res.status(500).json({ error: e.message || "Failed to analyze image" });
+    }
+});
+
+// --- Factory OS API ---
+// --- Factory OS API ---
+
+// 1. Set Active Product (Called by Operator App)
+app.post('/api/set-product', async (req: Request, res: Response): Promise<any> => {
+    try {
+        const { machine_id, product_sku } = req.body;
+        if (!machine_id || !product_sku) return res.status(400).json({ error: 'Missing params' });
+
+        const { error } = await supabase.from('machine_active_products').upsert({
+            machine_id,
+            product_sku,
+            updated_at: new Date()
+        });
+
+        if (error) throw error;
+        res.json({ status: 'ok', active_sku: product_sku });
+
+    } catch (e: any) {
+        console.error("Set Product Error", e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// 2. Get Active Products (Called by Dashboard)
+app.get('/api/active-products', async (req: Request, res: Response): Promise<any> => {
+    try {
+        const { data, error } = await supabase.from('machine_active_products').select('*');
+        if (error) throw error;
+        res.json(data);
+    } catch (e: any) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// 3. Alarm Trigger (Called by ESP32)
+app.post('/api/alarm', async (req: Request, res: Response): Promise<any> => {
+    try {
+        const { machine_id, alarm_count } = req.body;
+
+        if (!machine_id) {
+            return res.status(400).json({ error: 'machine_id is required' });
+        }
+
+        console.log(`Received alarm from ${machine_id}, count: ${alarm_count || 1}`);
+
+        // Resolve Active Product
+        let productSku = 'UNKNOWN'; // Default
+        const { data: activeProduct } = await supabase
+            .from('machine_active_products')
+            .select('product_sku')
+            .eq('machine_id', machine_id)
+            .single();
+
+        if (activeProduct) {
+            productSku = activeProduct.product_sku;
+        }
+
+        console.log(`[ALARM] Machine: ${machine_id}, ActiveSKU: ${productSku}, Count: ${alarm_count}`);
+
+        // Always use the count sent by the hardware (Dual Lane = 2)
+        const { error } = await supabase.from('production_logs').insert({
+            machine_id,
+            alarm_count: alarm_count || 1,
+            product_sku: productSku
+        });
+
+        if (error) throw error;
+
+        res.json({ status: 'ok', message: 'Logged successfully', product: productSku });
+
+    } catch (e: any) {
+        console.error("Alarm Log Error:", e);
+        res.status(500).json({ error: e.message || "Failed to log alarm" });
+    }
+});
+
+// --- AI Supervisor API ---
+import { aiService } from './src/services/ai_service.ts';
+
+app.post('/api/agent/chat', async (req: Request, res: Response): Promise<any> => {
+    try {
+        const { query } = req.body;
+        if (!query) return res.status(400).json({ error: 'Query required' });
+
+        console.log(`[AI Agent] Received query: "${query}"`);
+
+        // 1. Gather Context (Production logs from last 24 hours + Active Status)
+        const { data: activeMachines } = await supabase.from('machine_active_products').select('*');
+
+        // Get logs from today (Adjusted for timezone UTC+8 - Malaysia/China Standard Time)
+        // This ensures AI sees the same "Start of Day" as the Dashboard/User
+        const sgTime = new Date().toLocaleString("en-US", { timeZone: "Asia/Singapore" });
+        const sgDate = new Date(sgTime);
+        sgDate.setHours(0, 0, 0, 0);
+        const queryDate = sgDate.toISOString(); // This will be local midnight converted to UTC
+
+        const { data: rawLogs } = await supabase
+            .from('production_logs')
+            .select('*')
+            .gte('created_at', queryDate)
+            .order('created_at', { ascending: false })
+            .limit(50);
+
+        // Sanitize Data for AI (Rename 'alarm_count' to 'Produced_Units')
+        const cleanLogs = rawLogs?.map(log => ({
+            Timestamp: log.created_at,
+            Machine: log.machine_id,
+            Product: log.product_sku,
+            Lane: log.lane_id,
+            Produced_Units: log.alarm_count // Rename key
+        })) || [];
+
+
+        // 3a. Get Daily Statistics (Today)
+        const { count: totalTodayCount } = await supabase
+            .from('production_logs')
+            .select('*', { count: 'exact', head: true })
+            .gte('created_at', queryDate);
+
+        // 3b. Get Yesterday's Statistics (For context near midnight)
+        const yesterday = new Date(sgDate);
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayQueryString = yesterday.toISOString();
+        // Range: Yesterday Midnight to Today Midnight
+        const { count: totalYesterdayCount } = await supabase
+            .from('production_logs')
+            .select('*', { count: 'exact', head: true })
+            .gte('created_at', yesterdayQueryString)
+            .lt('created_at', queryDate);
+
+        // Fetch ALL logs for today (queryDate) to calculating Gaps and Efficiency
+        const { data: allDailyLogs } = await supabase
+            .from('production_logs')
+            .select('created_at, alarm_count')
+            .gte('created_at', queryDate)
+            .order('created_at', { ascending: true }); // Ascending for time calculation
+
+        // Calculate Gaps & Runtime
+        let gaps: string[] = [];
+        let actualRuntimeMinutes = 0;
+
+        if (allDailyLogs && allDailyLogs.length > 1) {
+            const firstLog = new Date(allDailyLogs[0].created_at);
+            const lastLog = new Date(allDailyLogs[allDailyLogs.length - 1].created_at);
+
+            // Total span in minutes
+            actualRuntimeMinutes = (lastLog.getTime() - firstLog.getTime()) / (1000 * 60);
+
+            // Find Gaps > 15 mins
+            for (let i = 1; i < allDailyLogs.length; i++) {
+                const prev = new Date(allDailyLogs[i - 1].created_at);
+                const curr = new Date(allDailyLogs[i].created_at);
+                const diffMins = (curr.getTime() - prev.getTime()) / (1000 * 60);
+
+                if (diffMins > 15) {
+                    gaps.push(`${prev.toLocaleTimeString()} to ${curr.toLocaleTimeString()} (${Math.round(diffMins)}m)`);
+                }
+            }
+        }
+
+        // 4. Machine Standards Dictionary (Knowledge Base)
+        const standards = {
+            "T1.2-M01": {
+                description: "Dual Lane Packaging Machine",
+                standard_cycle_time_seconds: 299, // for 2 units
+                units_per_cycle: 2,
+                expected_daily_output_24h: 578,
+                expected_shift_output_12h: 289
+            }
+        };
+
+        const context = {
+            activeMachines: activeMachines || [],
+            recentLogs: cleanLogs, // Still sending specific recent logs for immediate context
+            dailyStats: {
+                totalProductionCount: totalTodayCount || 0,
+                date: sgDate.toLocaleDateString(),
+                gapsFound: gaps,
+                firstLogTime: allDailyLogs?.[0]?.created_at,
+                lastLogTime: allDailyLogs?.[allDailyLogs.length - 1]?.created_at
+            },
+            yesterdayStats: {
+                totalProductionCount: totalYesterdayCount || 0,
+                date: yesterday.toLocaleDateString()
+            },
+            machineStandards: standards, // Pass standards to AI
+            timestamp: new Date().toISOString()
+        };
+
+        // 2. Ask AI
+        const answer = await aiService.askSupervisor(query, context);
+
+        res.json({ response: answer });
+
+    } catch (e: any) {
+        console.error("AI Agent Error:", e);
+        res.status(500).json({ error: e.message || "Internal AI Error" });
     }
 });
 
@@ -238,6 +441,52 @@ wss.on('connection', (ws: WebSocket) => {
     ws.on('close', () => {
         console.log('Client disconnected');
     });
+});
+
+// --- AI Vision API (Smart Import) ---
+app.post('/api/agent/vision', async (req: Request, res: Response): Promise<any> => {
+    try {
+        const { imageBase64 } = req.body;
+        if (!imageBase64) return res.status(400).json({ error: 'Image data required' });
+
+        if (!process.env.GEMINI_API_KEY && !process.env.GOOGLE_API_KEY) {
+            return res.status(500).json({ error: 'Server AI Key not configured' });
+        }
+
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        const prompt = `Extract customer data from this image (e.g. invoice, delivery order, contact card).
+        Return a STRICT JSON ARRAY of objects. 
+        Each object must have these keys if found: "name", "phone", "address".
+        If there are multiple people/companies, return multiple objects.
+        Infer the Zone (North/South/Central/East Malaysia) based on address if possible, key "zone".
+        Do not include markdown formatting (like \`\`\`json). Return raw JSON only.`;
+
+        const result = await model.generateContent([
+            prompt,
+            { inlineData: { mimeType: "image/jpeg", data: imageBase64 } }
+        ]);
+
+        const response = await result.response;
+        const text = response.text();
+
+        if (!text) throw new Error("No data returned from AI");
+
+        // Cleanup Text
+        const cleanJson = text.replace(/```json|```/g, '').trim();
+        const parsedData = JSON.parse(cleanJson);
+
+        res.json(parsedData);
+
+    } catch (e: any) {
+        console.error("Vision API Error:", e);
+        res.status(500).json({ error: e.message || "Vision analysis failed" });
+    }
+});
+
+// Catch-all for API 404 to avoid HTML response
+// Catch-all for any unhandled routes
+app.use((req, res) => {
+    res.status(404).json({ error: `Route not found: ${req.originalUrl}` });
 });
 
 server.listen(port, () => {

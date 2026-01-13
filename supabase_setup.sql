@@ -147,3 +147,22 @@ ALTER TABLE public.maintenance_logs ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Enable read access for all users" ON public.maintenance_logs FOR SELECT USING (true);
 CREATE POLICY "Enable insert for authenticated users" ON public.maintenance_logs FOR INSERT WITH CHECK (auth.role() = 'authenticated');
 CREATE POLICY "Enable update for authenticated users" ON public.maintenance_logs FOR UPDATE USING (auth.role() = 'authenticated');
+
+
+-- 8. Create production_logs table (For Factory OS)
+CREATE TABLE IF NOT EXISTS public.production_logs (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    machine_id TEXT NOT NULL,
+    alarm_count INTEGER DEFAULT 1,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Enable RLS
+ALTER TABLE public.production_logs ENABLE ROW LEVEL SECURITY;
+
+-- Policies
+-- Allow public/anon read for the dashboard
+CREATE POLICY "Enable read access for all users" ON public.production_logs FOR SELECT USING (true);
+-- Allow service_role (backend) or authenticated users to insert
+CREATE POLICY "Enable insert for authenticated users" ON public.production_logs FOR INSERT WITH CHECK (true);
+

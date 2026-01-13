@@ -2,7 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
 import { getRecommendedPackaging } from '../utils/packagingRules';
 import { getV2Items } from '../services/apiV2';
-import { Plus, Search, Calendar, FileText, X, Truck, Package, User as UserIcon, ListFilter, Box } from 'lucide-react';
+import { determineZone, findBestFactory } from '../utils/logistics';
+import {
+    Plus, Search, Calendar, FileText, X, Truck, Package,
+    User as UserIcon, ListFilter, Box, Sparkles, Upload,
+    ChevronRight, MapPin, AlertCircle
+} from 'lucide-react';
 import {
     SalesOrder,
     ProductLayer,
@@ -20,13 +25,16 @@ import {
 } from '../data/constants';
 
 const DeliveryOrderManagement: React.FC = () => {
-    // State
+    // --- STATE ---
     const [orders, setOrders] = useState<SalesOrder[]>([]);
     const [drivers, setDrivers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('All');
+
+    // AI / Smart Import State
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
 
     // Editing State
     const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
@@ -35,6 +43,13 @@ const DeliveryOrderManagement: React.FC = () => {
     const [selectedDriverId, setSelectedDriverId] = useState('');
     const [newOrderDeliveryDate, setNewOrderDeliveryDate] = useState('');
     const [newOrderItems, setNewOrderItems] = useState<SalesOrder['items']>([]);
+    const [orderCustomer, setOrderCustomer] = useState('');
+    const [newOrderAddress, setNewOrderAddress] = useState('');
+
+    // AI Autocomplete State
+    const [customerDB, setCustomerDB] = useState<any[]>([]);
+    const [filteredCustomers, setFilteredCustomers] = useState<any[]>([]);
+    const [showSuggestions, setShowSuggestions] = useState(false);
 
     // Hybrid Item Entry State
     const [entryMode, setEntryMode] = useState<'search' | 'manual'>('search');
@@ -54,9 +69,9 @@ const DeliveryOrderManagement: React.FC = () => {
 
     // Shared Additional Info
     const [currentItemRemark, setCurrentItemRemark] = useState('');
-
-    // Shared Quantity
     const [currentItemQty, setCurrentItemQty] = useState(0);
+
+    // --- EFFECTS ---
 
     // Auto-calculate packaging & SKU (Manual Mode)
     useEffect(() => {
@@ -67,32 +82,31 @@ const DeliveryOrderManagement: React.FC = () => {
         const mCode = PRODUCT_MATERIALS.find(m => m.value === currentItemMaterial)?.code;
         const lCode = PRODUCT_LAYERS.find(l => l.value === currentItemLayer)?.code;
         const cCode = PACKAGING_COLORS.find(c => c.value === recommended)?.code;
-
         const sku = `PROD-BW-${lCode}${wCode}-${mCode}-${cCode}`;
 
-        // Generate Human Readable Description
         const layerLabel = PRODUCT_LAYERS.find(l => l.value === currentItemLayer)?.label || currentItemLayer;
         const materialLabel = PRODUCT_MATERIALS.find(m => m.value === currentItemMaterial)?.label || currentItemMaterial;
         const sizeLabel = PRODUCT_SIZES.find(s => s.value === currentItemSize)?.label || currentItemSize;
-
         const description = `Bubble Wrap ${sizeLabel} ${layerLabel} Layer ${materialLabel}`;
 
         setCurrentItemSku(sku);
         setCurrentItemProductDesc(description);
     }, [currentItemLayer, currentItemMaterial, currentItemSize]);
 
-    // Fetch Initial Data
+    // Fetch Data
     const fetchData = async () => {
         setLoading(true);
         try {
-            // 1. Fetch Drivers & Orders Parallel
-            const [usersRes, ordersRes, itemsRes] = await Promise.all([
+            const [usersRes, ordersRes, itemsRes, customersRes] = await Promise.all([
                 supabase.from('users_public').select('*').eq('role', 'Driver'),
                 supabase.from('sales_orders').select('*').order('created_at', { ascending: false }),
-                getV2Items()
+                getV2Items(),
+                supabase.from('sys_customers').select('*')
             ]);
 
-            // Process Drivers
+            if (customersRes.data) setCustomerDB(customersRes.data);
+            if (itemsRes) setV2Items(itemsRes);
+
             if (usersRes.data) {
                 const mappedDrivers: User[] = usersRes.data.map(u => ({
                     uid: u.id,
@@ -103,7 +117,6 @@ const DeliveryOrderManagement: React.FC = () => {
                 setDrivers(mappedDrivers);
             }
 
-            // Process Orders
             if (ordersRes.data) {
                 const mappedOrders: SalesOrder[] = ordersRes.data.map(o => ({
                     id: o.id,
@@ -114,14 +127,12 @@ const DeliveryOrderManagement: React.FC = () => {
                     status: o.status,
                     orderDate: o.order_date,
                     deadline: o.deadline,
-                    notes: o.notes
+                    notes: o.notes,
+                    zone: o.zone,
+                    deliveryAddress: o.delivery_address
                 }));
                 setOrders(mappedOrders);
             }
-
-            // Process Items
-            setV2Items(itemsRes);
-
         } catch (err) {
             console.error("System Error:", err);
         } finally {
@@ -131,45 +142,65 @@ const DeliveryOrderManagement: React.FC = () => {
 
     useEffect(() => {
         fetchData();
-        const channel = supabase.channel('delivery-orders-changes')
+        const channel = supabase.channel('do-changes')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'sales_orders' }, fetchData)
             .subscribe();
         return () => { supabase.removeChannel(channel); };
     }, []);
 
-    // Logic: Filtered V2 Items
+    // Filter Logic
+    const filteredOrders = orders.filter(o =>
+        (statusFilter === 'All' || o.status === statusFilter) &&
+        (getDriverName(o.driverId)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            o.orderNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            o.customer.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+
     const filteredV2Items = v2Items.filter(item =>
     (item.name.toLowerCase().includes(itemSearchTerm.toLowerCase()) ||
         item.sku.toLowerCase().includes(itemSearchTerm.toLowerCase()))
-    ).slice(0, 50); // Limit to 50 results for performance
+    ).slice(0, 50);
 
-    // Handlers
+    // Stock Visibility
+    const [stockMap, setStockMap] = useState<Record<string, number>>({});
+    useEffect(() => {
+        const fetchStock = async () => {
+            const { data } = await supabase.rpc('get_live_stock_viewer');
+            if (data) {
+                const map: Record<string, number> = {};
+                data.forEach((item: any) => map[item.sku] = item.current_stock);
+                setStockMap(map);
+            }
+        };
+        if (isCreateModalOpen) fetchStock();
+    }, [isCreateModalOpen]);
+
+    // --- HANDLERS ---
+
     const handleAddItem = () => {
-        if (currentItemQty <= 0) {
-            alert("Please enter a valid quantity.");
-            return;
-        }
+        if (currentItemQty <= 0) return alert("Please enter a valid quantity.");
 
         let newItem: any = {};
-
         if (entryMode === 'search') {
-            if (!selectedV2Item) {
-                alert("Please select a product from the list.");
-                return;
+            if (!selectedV2Item) return alert("Please select a product.");
+
+            // Stock Check
+            const currentStock = stockMap[selectedV2Item.sku] || 0;
+            if (currentItemQty > currentStock) {
+                if (!window.confirm(`⚠️ Insufficient Stock!\nAvailable: ${currentStock}\nProceed anyway?`)) return;
             }
+
             newItem = {
                 product: selectedV2Item.name,
-                sku: selectedV2Item.sku, // Store explicit SKU
+                sku: selectedV2Item.sku,
                 quantity: currentItemQty,
                 remark: currentItemRemark,
-                // Optional fields for compatibility
                 packaging: selectedV2Item.uom || 'Unit'
             };
         } else {
-            // Manual Mode
             newItem = {
-                product: currentItemProductDesc, // Human Readable
-                sku: currentItemSku,             // Machine Code
+                product: currentItemProductDesc,
+                sku: currentItemSku,
                 layer: currentItemLayer,
                 material: currentItemMaterial,
                 packaging: currentItemPackaging,
@@ -181,7 +212,7 @@ const DeliveryOrderManagement: React.FC = () => {
 
         setNewOrderItems([...newOrderItems, newItem]);
         setCurrentItemQty(0);
-        setCurrentItemRemark(''); // Reset remark
+        setCurrentItemRemark('');
         setSelectedV2Item(null);
         setItemSearchTerm('');
     };
@@ -192,128 +223,179 @@ const DeliveryOrderManagement: React.FC = () => {
         setNewOrderItems(updated);
     };
 
-    const handleSubmitOrder = async () => {
-        if (!selectedDriverId || newOrderItems.length === 0) {
-            alert("Please select a driver and at least one item.");
-            return;
+    const handleCustomerSearch = (term: string) => {
+        setOrderCustomer(term);
+        if (term.length > 0) {
+            const matches = customerDB.filter(c => c.name.toLowerCase().includes(term.toLowerCase())).slice(0, 5);
+            setFilteredCustomers(matches);
+            setShowSuggestions(true);
+        } else {
+            setShowSuggestions(false);
         }
+    };
+
+    const handleSelectCustomer = (customer: any) => {
+        setOrderCustomer(customer.name);
+        setNewOrderAddress(customer.address || '');
+        setShowSuggestions(false);
+    };
+
+    const handleSubmitOrder = async () => {
+        if (!orderCustomer.trim()) return alert("Enter Customer Name");
+        if (newOrderItems.length === 0) return alert("Add at least one item");
 
         try {
             const doNumber = `DO-${new Date().getFullYear()}-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
-            const driver = drivers.find(d => d.uid === selectedDriverId);
-            const driverName = driver ? driver.name : 'Unknown Driver';
+            const zone = determineZone(newOrderAddress || '');
+            const bestFactory = findBestFactory(zone, newOrderItems, stockMap);
 
             const payload = {
                 order_number: doNumber,
-                customer: `Assigned: ${driverName}`,
-                driver_id: selectedDriverId,
-                items: newOrderItems, // JSONB
+                customer: orderCustomer,
+                delivery_address: newOrderAddress,
+                zone: zone,
+                factory_id: bestFactory.id,
+                driver_id: selectedDriverId || null,
+                items: newOrderItems,
                 status: 'New',
                 order_date: new Date().toISOString().split('T')[0],
                 deadline: newOrderDeliveryDate || null
             };
 
             if (editingOrderId) {
-                // UPDATE Existing
-                const { error } = await supabase
-                    .from('sales_orders')
-                    .update({
-                        driver_id: selectedDriverId,
-                        customer: `Assigned: ${driverName}`, // Optional: keep original customer name? keeping simple for now
-                        items: newOrderItems,
-                        deadline: newOrderDeliveryDate || null
-                    })
-                    .eq('id', editingOrderId);
+                const { error } = await supabase.from('sales_orders').update(payload).eq('id', editingOrderId);
                 if (error) throw error;
-                alert("Order Updated Successfully!");
+                alert(`Order Updated!\nAssigned to ${bestFactory.name}`);
             } else {
-                // CREATE New
-                const payload = {
-                    order_number: doNumber,
-                    customer: `Assigned: ${driverName}`,
-                    driver_id: selectedDriverId,
-                    items: newOrderItems, // JSONB
-                    status: 'New',
-                    order_date: new Date().toISOString().split('T')[0],
-                    deadline: newOrderDeliveryDate || null
-                };
-
                 const { error } = await supabase.from('sales_orders').insert(payload);
                 if (error) throw error;
-                alert("Delivery Order Assigned!");
+
+                // Auto-save NEW customer
+                const existing = customerDB.find(c => c.name.toLowerCase() === orderCustomer.toLowerCase());
+                if (!existing && newOrderAddress) {
+                    supabase.from('sys_customers').insert({
+                        name: orderCustomer, address: newOrderAddress, zone: determineZone(newOrderAddress)
+                    }).then(() => {
+                        supabase.from('sys_customers').select('*').then(res => res.data && setCustomerDB(res.data));
+                    });
+                }
+                alert(`Order Created!\nAssigned to ${bestFactory.name} (Zone: ${zone})`);
             }
 
-            setIsCreateModalOpen(false);
-            setEditingOrderId(null); // Reset
-            setSelectedDriverId('');
-            setNewOrderDeliveryDate('');
-            setNewOrderItems([]);
+            handleCloseModal();
+            fetchData();
         } catch (err: any) {
-            console.error("Error creating DO:", err);
-            alert("Failed: " + err.message);
+            alert("Error: " + err.message);
         }
     };
 
-    const getDriverName = (driverId?: string) => {
+    const handleCloseModal = () => {
+        setIsCreateModalOpen(false);
+        setEditingOrderId(null);
+        setSelectedDriverId('');
+        setOrderCustomer('');
+        setNewOrderAddress('');
+        setNewOrderDeliveryDate('');
+        setNewOrderItems([]);
+    };
+
+    function getDriverName(driverId?: string) {
         if (!driverId) return 'Unassigned';
         const d = drivers.find(u => u.uid === driverId);
         return d ? d.name : 'Unknown Driver';
+    }
+
+    // --- AI SMART IMPORT LOGIC ---
+    const handleAIFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setIsAnalyzing(true);
+        try {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = async () => {
+                const base64Data = reader.result as string;
+                const base64Clean = base64Data.split(',')[1]; // Server expects raw base64
+
+                // Call Server Vision API
+                const response = await fetch('http://localhost:8080/api/agent/vision', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ imageBase64: base64Clean })
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || 'Server error');
+                }
+
+                const data = await response.json(); // Array of extracted objects
+
+                if (Array.isArray(data) && data.length > 0) {
+                    const first = data[0]; // Take first contact found
+                    if (first.name) setOrderCustomer(first.name);
+                    if (first.address) setNewOrderAddress(first.address);
+                    // You could also extract items if the prompt was updated, but for now just Contact Info
+                    alert(`✨ AI Extracted:\nName: ${first.name}\nAddress: ${first.address}`);
+                } else {
+                    alert("AI couldn't find contact info in this image.");
+                }
+                setIsAnalyzing(false);
+            };
+        } catch (err: any) {
+            console.error(err);
+            alert("AI Error: " + err.message);
+            setIsAnalyzing(false);
+        }
     };
 
-    const filteredOrders = orders.filter(o =>
-        (statusFilter === 'All' || o.status === statusFilter) &&
-        (getDriverName(o.driverId)?.toLowerCase().includes(searchTerm.toLowerCase()) || o.orderNumber?.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
-
-    const handleEditOrder = (order: SalesOrder) => {
-        setEditingOrderId(order.id);
-        setSelectedDriverId(order.driverId);
-        setNewOrderDeliveryDate(order.deadline || '');
-        setNewOrderItems(order.items || []);
-        setIsCreateModalOpen(true);
-    };
 
     return (
-        <div className="p-6 h-full text-gray-100 animate-fade-in flex flex-col gap-6">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-center gap-4 border-b border-white/5 pb-6">
+        <div className="min-h-screen bg-slate-950 text-slate-100 p-6 font-sans selection:bg-blue-500/30">
+            {/* --- HEADER --- */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
                 <div>
-                    <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-                        <Truck className="text-blue-500" />
-                        Logistics & Dispatch
+                    <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400 flex items-center gap-3">
+                        <Truck className="text-blue-400" size={32} />
+                        Order Management
                     </h1>
-                    <p className="text-gray-400 mt-1">Assign orders to drivers and track deliveries.</p>
+                    <p className="text-slate-400 mt-1 font-medium">Assign orders, track shipments, and manage fleet.</p>
                 </div>
                 <button
-                    onClick={() => setIsCreateModalOpen(true)}
-                    className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-bold shadow-lg transition-all"
+                    onClick={() => { handleCloseModal(); setIsCreateModalOpen(true); }}
+                    className="group relative bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl flex items-center gap-3 font-bold shadow-xl shadow-blue-900/20 transition-all active:scale-95"
                 >
-                    <Plus size={20} /> Assign New Order
+                    <Plus size={20} className="group-hover:rotate-90 transition-transform" />
+                    New Order
                 </button>
             </div>
 
-            {/* Filters */}
-            {/* Filters */}
-            <div className="flex flex-wrap gap-4 bg-[#1e1e24] p-4 rounded-xl border border-white/5 shadow-xl">
-                <div className="flex-1 min-w-[200px] relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" size={18} />
+            {/* --- FILTERS & STATS --- */}
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
+                {/* Search Bar */}
+                <div className="lg:col-span-2 relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                        <Search size={18} />
+                    </div>
                     <input
                         type="text"
-                        placeholder="Search Driver or DO #..."
+                        placeholder="Search Driver, Customer, or DO Number..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full bg-[#121215] border border-white/10 rounded-lg pl-10 pr-4 py-2.5 text-white focus:border-blue-500/50 outline-none transition-all placeholder:text-gray-600"
+                        className="w-full bg-slate-900/50 backdrop-blur-sm border border-slate-800 text-slate-200 text-sm rounded-xl pl-10 pr-4 py-3 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 outline-none transition-all placeholder:text-slate-600"
                     />
                 </div>
-                {/* Status Filters */}
-                <div className="flex items-center gap-2 bg-[#121215] p-1 rounded-lg border border-white/5">
+
+                {/* Status Tabs */}
+                <div className="lg:col-span-2 flex bg-slate-900/50 backdrop-blur-sm border border-slate-800 rounded-xl p-1">
                     {['All', 'New', 'Delivered'].map(status => (
                         <button
                             key={status}
                             onClick={() => setStatusFilter(status)}
-                            className={`px-4 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${statusFilter === status
-                                ? 'bg-blue-600 text-white shadow-lg'
-                                : 'text-gray-500 hover:text-gray-300'
+                            className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${statusFilter === status
+                                    ? 'bg-blue-600/20 text-blue-400 shadow-sm border border-blue-500/10'
+                                    : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
                                 }`}
                         >
                             {status}
@@ -322,73 +404,84 @@ const DeliveryOrderManagement: React.FC = () => {
                 </div>
             </div>
 
-            {/* Content Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                {/* Driver Cards (Grouped) */}
+            {/* --- MAIN GRID --- */}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 {drivers.map(driver => {
-                    // Filter orders for this driver
                     const driverOrders = filteredOrders.filter(o => o.driverId === driver.uid);
-                    if (driverOrders.length === 0 && searchTerm) return null; // Hide empty if searching
+                    if (driverOrders.length === 0 && (searchTerm || statusFilter !== 'All')) return null;
 
                     return (
-                        <div key={driver.uid} className="bg-[#1e1e24] border border-white/5 rounded-2xl p-5 hover:border-white/10 transition-all flex flex-col h-[500px]">
-                            {/* Driver Header */}
-                            <div className="flex items-center gap-4 mb-4 pb-4 border-b border-white/5">
-                                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-900/20 to-purple-900/20 flex items-center justify-center border border-white/5">
-                                    <UserIcon className="text-blue-400" />
-                                </div>
-                                <div>
-                                    <h3 className="font-bold text-lg text-white">{driver.name}</h3>
-                                    <p className="text-xs text-gray-500 font-mono">ID: {driver.uid.substring(0, 6)}</p>
-                                </div>
-                                <div className="ml-auto text-right">
-                                    <span className="block text-2xl font-black text-white">{driverOrders.length}</span>
-                                    <span className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Active DOs</span>
+                        <div key={driver.uid} className="bg-slate-900/40 backdrop-blur-md border border-slate-800/60 rounded-2xl flex flex-col overflow-hidden hover:border-blue-500/30 transition-all group">
+                            {/* Card Header */}
+                            <div className="p-5 border-b border-slate-800/60 bg-gradient-to-r from-slate-900 to-transparent">
+                                <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700 text-blue-400">
+                                            <UserIcon size={20} />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-bold text-slate-200">{driver.name}</h3>
+                                            <p className="text-xs text-slate-500 font-mono">ID: {driver.uid.substring(0, 6)}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col items-end">
+                                        <div className="text-2xl font-black text-slate-100">{driverOrders.length}</div>
+                                        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Active DOs</div>
+                                    </div>
                                 </div>
                             </div>
 
                             {/* Orders List */}
-                            <div className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar">
+                            <div className="flex-1 p-3 space-y-3 max-h-[500px] overflow-y-auto custom-scrollbar">
                                 {driverOrders.map(order => (
-                                    <div key={order.id} className="bg-[#121215] p-4 rounded-xl border border-white/5 group hover:border-blue-500/30 transition-all relative overflow-hidden">
-                                        <div className="flex justify-between items-start mb-2 relative z-10">
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-mono text-xs text-blue-400 bg-blue-500/10 px-2 py-1 rounded">{order.orderNumber}</span>
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); handleEditOrder(order); }}
-                                                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-white/10 rounded text-blue-400"
-                                                    title="Edit Order"
-                                                >
-                                                    ✏️
-                                                </button>
+                                    <div
+                                        key={order.id}
+                                        onClick={() => {
+                                            setEditingOrderId(order.id);
+                                            setSelectedDriverId(order.driverId || '');
+                                            setOrderCustomer(order.customer);
+                                            setNewOrderAddress(order.deliveryAddress || '');
+                                            setNewOrderDeliveryDate(order.deadline || '');
+                                            setNewOrderItems(order.items || []);
+                                            setIsCreateModalOpen(true);
+                                        }}
+                                        className="bg-slate-950/50 border border-slate-800 p-4 rounded-xl hover:bg-blue-900/10 hover:border-blue-500/30 cursor-pointer transition-all relative group/card"
+                                    >
+                                        <div className="flex justify-between items-start mb-2">
+                                            <div className="font-mono text-xs text-blue-400 bg-blue-500/10 px-2 py-1 rounded border border-blue-500/10">
+                                                {order.orderNumber}
                                             </div>
-                                            <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border ${order.status === 'New' ? 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10' :
-                                                order.status === 'Delivered' ? 'text-green-400 border-green-500/30 bg-green-500/10' :
-                                                    'text-gray-400 border-gray-600 bg-gray-800'
+                                            <div className={`text-[10px] font-bold px-2 py-0.5 rounded border ${order.status === 'New' ? 'text-amber-400 border-amber-500/20 bg-amber-500/10' :
+                                                    order.status === 'Delivered' ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' :
+                                                        'text-slate-400 border-slate-700 bg-slate-800'
                                                 }`}>
                                                 {order.status}
-                                            </span>
+                                            </div>
                                         </div>
-                                        <h4 className="font-bold text-gray-200 text-sm mb-1">{order.customer}</h4>
-                                        <p className="text-xs text-gray-500 flex items-center gap-1">
+                                        <h4 className="font-bold text-slate-200 text-sm mb-1 truncate">{order.customer}</h4>
+                                        <div className="text-xs text-slate-500 flex items-center gap-2 mb-3">
                                             <Calendar size={12} /> {order.deadline || 'No Deadline'}
-                                        </p>
+                                            {order.zone && <span className="text-slate-600">• {order.zone}</span>}
+                                        </div>
 
-                                        {/* Items Summary */}
-                                        <div className="mt-3 pt-3 border-t border-white/5 grid grid-cols-2 gap-2">
-                                            {order.items?.map((item, idx) => (
-                                                <div key={idx} className="bg-white/5 p-2 rounded text-[10px] text-gray-400 truncate">
-                                                    <span className="text-white font-bold">{item.quantity}x</span> {item.product}
-                                                    {item.remark && <div className="text-[10px] text-yellow-500/80 italic mt-0.5">{item.remark}</div>}
+                                        {/* Items Preview */}
+                                        <div className="space-y-1">
+                                            {order.items?.slice(0, 3).map((item, i) => (
+                                                <div key={i} className="text-[11px] text-slate-400 flex items-center gap-1 truncate">
+                                                    <Box size={10} className="text-slate-600" />
+                                                    <span className="text-slate-300 font-bold">{item.quantity}x</span> {item.product}
                                                 </div>
                                             ))}
+                                            {order.items && order.items.length > 3 && (
+                                                <div className="text-[10px] text-slate-600 italic">+ {order.items.length - 3} more items</div>
+                                            )}
                                         </div>
                                     </div>
                                 ))}
                                 {driverOrders.length === 0 && (
-                                    <div className="h-full flex flex-col items-center justify-center text-gray-600 opacity-50 space-y-2">
-                                        <Box size={32} />
-                                        <p className="text-sm font-medium">No active orders</p>
+                                    <div className="h-32 flex flex-col items-center justify-center text-slate-700">
+                                        <Box size={32} className="mb-2 opacity-50" />
+                                        <span className="text-xs font-medium">No active orders</span>
                                     </div>
                                 )}
                             </div>
@@ -397,291 +490,242 @@ const DeliveryOrderManagement: React.FC = () => {
                 })}
             </div>
 
-            {/* Create DO Modal */}
+            {/* --- CREATE / EDIT MODAL --- */}
             {isCreateModalOpen && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-                    <div className="bg-[#18181b] rounded-2xl border border-white/10 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col">
-                        <div className="p-6 border-b border-white/5 flex justify-between items-center sticky top-0 bg-[#18181b] z-20">
-                            <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                                <Truck className="text-blue-500" /> {editingOrderId ? 'Edit Driver Order' : 'Assign Driver Order'}
-                            </h2>
-                            <button onClick={() => setIsCreateModalOpen(false)} className="text-gray-400 hover:text-white transition-colors"><X /></button>
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-slate-950 border border-slate-800 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl shadow-black">
+                        {/* Modal Header */}
+                        <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
+                            <div>
+                                <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
+                                    {editingOrderId ? <FileText className="text-blue-400" /> : <Plus className="text-blue-400" />}
+                                    {editingOrderId ? 'Edit Order' : 'Create New Order'}
+                                </h2>
+                                <p className="text-xs text-slate-500 mt-1">Fill in details manually or use AI Import.</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {/* AI IMPORT BUTTON */}
+                                <label className="relative cursor-pointer group">
+                                    <input type="file" className="hidden" accept="image/*" onChange={handleAIFileUpload} disabled={isAnalyzing} />
+                                    <div className={`px-4 py-2 rounded-lg border border-purple-500/30 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20 transition-all flex items-center gap-2 font-bold text-sm ${isAnalyzing ? 'animate-pulse cursor-wait' : ''}`}>
+                                        <Sparkles size={16} className={isAnalyzing ? 'animate-spin' : ''} />
+                                        {isAnalyzing ? 'Analyzing...' : 'AI Auto-Fill'}
+                                    </div>
+                                    <div className="absolute top-full right-0 mt-2 w-48 p-2 bg-slate-900 border border-slate-700 rounded-lg text-[10px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
+                                        Upload a DO/Invoice image to auto-fill customer info.
+                                    </div>
+                                </label>
+
+                                <button onClick={handleCloseModal} className="p-2 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-white transition-all">
+                                    <X size={20} />
+                                </button>
+                            </div>
                         </div>
 
-                        <div className="p-6 space-y-6 flex-1">
-                            {/* Driver Selection & Dates */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Select Driver</label>
+                        {/* Modal Body */}
+                        <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar bg-slate-950">
+
+                            {/* Section 1: Customer & Delivery */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-4">
                                     <div className="relative">
-                                        <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" size={16} />
-                                        <select
-                                            className="w-full bg-[#121215] border border-white/10 rounded-lg px-10 py-2.5 text-white focus:border-blue-500/50 outline-none appearance-none transition-all"
-                                            value={selectedDriverId}
-                                            onChange={e => setSelectedDriverId(e.target.value)}
-                                        >
-                                            <option value="">-- Choose Driver --</option>
-                                            {drivers.map(d => (
-                                                <option key={d.uid} value={d.uid}>
-                                                    {d.name} ({d.email})
-                                                </option>
-                                            ))}
-                                        </select>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Customer Name</label>
+                                        <div className="relative">
+                                            <Search className="absolute left-3 top-3 text-slate-600" size={16} />
+                                            <input
+                                                type="text"
+                                                className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-3 text-sm text-slate-200 focus:border-blue-500/50 outline-none font-bold"
+                                                placeholder="Search or type new customer..."
+                                                value={orderCustomer}
+                                                onChange={e => handleCustomerSearch(e.target.value)}
+                                                onFocus={() => orderCustomer && setShowSuggestions(true)}
+                                            />
+                                            {showSuggestions && filteredCustomers.length > 0 && (
+                                                <div className="absolute top-full left-0 right-0 mt-2 bg-slate-900 border border-slate-700 rounded-xl shadow-xl z-50 overflow-hidden">
+                                                    {filteredCustomers.map(c => (
+                                                        <div key={c.id} onClick={() => handleSelectCustomer(c)} className="px-4 py-3 hover:bg-blue-600/10 hover:text-blue-400 cursor-pointer text-sm border-b border-slate-800 last:border-0 transition-colors">
+                                                            <div className="font-bold">{c.name}</div>
+                                                            <div className="text-xs text-slate-500 truncate">{c.address}</div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Delivery Address</label>
+                                        <textarea
+                                            className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-300 focus:border-blue-500/50 outline-none min-h-[80px]"
+                                            placeholder="Full address..."
+                                            value={newOrderAddress}
+                                            onChange={e => setNewOrderAddress(e.target.value)}
+                                        />
                                     </div>
                                 </div>
-                                <div>
-                                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Target Date (Optional)</label>
-                                    <input
-                                        type="date"
-                                        className="w-full bg-[#121215] border border-white/10 rounded-lg px-3 py-2.5 text-white focus:border-blue-500/50 outline-none placeholder-gray-600 transition-all"
-                                        value={newOrderDeliveryDate}
-                                        onChange={e => setNewOrderDeliveryDate(e.target.value)}
-                                    />
+
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Assigned Driver</label>
+                                        <div className="relative">
+                                            <UserIcon className="absolute left-3 top-3 text-slate-600" size={16} />
+                                            <select
+                                                className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-10 py-3 text-sm text-slate-200 focus:border-blue-500/50 outline-none appearance-none"
+                                                value={selectedDriverId}
+                                                onChange={e => setSelectedDriverId(e.target.value)}
+                                            >
+                                                <option value="">-- Unassigned --</option>
+                                                {drivers.map(d => <option key={d.uid} value={d.uid}>{d.name}</option>)}
+                                            </select>
+                                            <div className="absolute right-4 top-4 pointer-events-none text-slate-600">▼</div>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Deadline</label>
+                                        <input
+                                            type="date"
+                                            className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-300 focus:border-blue-500/50 outline-none"
+                                            value={newOrderDeliveryDate}
+                                            onChange={e => setNewOrderDeliveryDate(e.target.value)}
+                                        />
+                                    </div>
                                 </div>
                             </div>
 
-                            <hr className="border-white/5" />
+                            <hr className="border-slate-800" />
 
-                            {/* Add Items Section */}
+                            {/* Section 2: Items */}
                             <div>
-                                <h3 className="text-sm font-bold text-blue-400 uppercase mb-4 flex items-center gap-2 tracking-wider">
-                                    <Package size={16} /> Load Items
+                                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                    <Box size={16} /> Order Items
                                 </h3>
 
-                                {/* Tabs */}
-                                <div className="flex gap-2 mb-4 bg-[#121215] p-1 rounded-lg w-fit border border-white/5">
-                                    <button
-                                        onClick={() => setEntryMode('search')}
-                                        className={`px-4 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${entryMode === 'search' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
-                                    >
-                                        <Search size={14} /> Search
-                                    </button>
-                                    <button
-                                        onClick={() => setEntryMode('manual')}
-                                        className={`px-4 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${entryMode === 'manual' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
-                                    >
-                                        <ListFilter size={14} /> Bubblewrap
-                                    </button>
-                                </div>
+                                <div className="bg-slate-900/30 border border-slate-800 rounded-xl p-5 space-y-5">
+                                    {/* Entry Mode Switch */}
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => setEntryMode('search')}
+                                            className={`px-4 py-2 rounded-lg text-xs font-bold uppercase transition-all flex items-center gap-2 ${entryMode === 'search' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-slate-200'}`}
+                                        >
+                                            <Search size={14} /> Search SKU
+                                        </button>
+                                        <button
+                                            onClick={() => setEntryMode('manual')}
+                                            className={`px-4 py-2 rounded-lg text-xs font-bold uppercase transition-all flex items-center gap-2 ${entryMode === 'manual' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-slate-200'}`}
+                                        >
+                                            <ListFilter size={14} /> Manual Build
+                                        </button>
+                                    </div>
 
-                                <div className="bg-[#121215]/50 p-4 rounded-xl border border-white/5 space-y-4">
-                                    {/* MODE A: Search */}
-                                    {entryMode === 'search' && (
-                                        <div className="space-y-3">
+                                    {/* Inputs */}
+                                    <div className="space-y-4">
+                                        {entryMode === 'search' ? (
                                             <div className="relative">
-                                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" size={16} />
                                                 <input
                                                     type="text"
-                                                    placeholder="Search SKU or Name (e.g. 'AirTube')"
-                                                    className="w-full bg-[#121215] border border-white/10 rounded-lg pl-10 pr-4 py-2 text-white focus:border-blue-500/50 outline-none transition-all placeholder:text-gray-600"
+                                                    placeholder="Search product name or SKU..."
+                                                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:border-blue-500/50 outline-none"
                                                     value={itemSearchTerm}
-                                                    onChange={e => {
-                                                        setItemSearchTerm(e.target.value);
-                                                        setSelectedV2Item(null); // Reset selection on search
-                                                    }}
+                                                    onChange={e => { setItemSearchTerm(e.target.value); setSelectedV2Item(null); }}
                                                 />
-                                            </div>
-
-                                            {/* Results List */}
-                                            {itemSearchTerm && !selectedV2Item && (
-                                                <div className="max-h-40 overflow-y-auto bg-[#121215] border border-white/10 rounded-lg divide-y divide-white/5 custom-scrollbar">
-                                                    {filteredV2Items.length === 0 ? (
-                                                        <div className="p-3 text-gray-500 text-sm text-center">No matches found.</div>
-                                                    ) : (
-                                                        filteredV2Items.map(item => (
-                                                            <div
-                                                                key={item.sku}
-                                                                onClick={() => {
-                                                                    setSelectedV2Item(item);
-                                                                    setItemSearchTerm(item.name); // Fill input
-                                                                }}
-                                                                className="p-2 px-3 hover:bg-white/5 cursor-pointer flex justify-between items-center group transition-colors"
-                                                            >
+                                                {/* Results */}
+                                                {itemSearchTerm && !selectedV2Item && (
+                                                    <div className="absolute w-full mt-2 bg-slate-900 border border-slate-700 rounded-xl z-20 max-h-48 overflow-y-auto shadow-2xl">
+                                                        {filteredV2Items.map(item => (
+                                                            <div key={item.sku} onClick={() => { setSelectedV2Item(item); setItemSearchTerm(item.name); }} className="p-3 hover:bg-slate-800 cursor-pointer flex justify-between items-center group">
                                                                 <div>
-                                                                    <div className="text-sm text-gray-200 font-medium group-hover:text-blue-300 transition-colors">{item.name}</div>
-                                                                    <div className="text-[10px] text-gray-600 font-mono">{item.sku}</div>
+                                                                    <div className="text-sm font-medium text-slate-200 group-hover:text-blue-300">{item.name}</div>
+                                                                    <div className="text-xs text-slate-500">{item.sku}</div>
                                                                 </div>
-                                                                <div className="text-[10px] px-2 py-0.5 bg-white/5 rounded text-gray-400 border border-white/5">{item.uom}</div>
+                                                                <div className="text-xs font-bold text-slate-500 bg-slate-800 px-2 py-1 rounded">Stock: {stockMap[item.sku] || 0}</div>
                                                             </div>
-                                                        ))
-                                                    )}
-                                                </div>
-                                            )}
-
-                                            {/* Selection Preview */}
-                                            {selectedV2Item && (
-                                                <div className="flex items-center gap-3 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-                                                    <Box className="text-blue-400" />
-                                                    <div>
-                                                        <div className="text-sm font-bold text-blue-300">Selected: {selectedV2Item.name}</div>
-                                                        <div className="text-xs text-gray-400">{selectedV2Item.sku} | Supply: {selectedV2Item.supply_type}</div>
+                                                        ))}
                                                     </div>
-                                                </div>
-                                            )}
-
-                                            {/* Remark Input (Search Mode) */}
-                                            <div>
-                                                <input
-                                                    type="text"
-                                                    placeholder="Remark (Optional)..."
-                                                    className="w-full bg-[#121215] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-blue-500/50 outline-none placeholder-gray-600"
-                                                    value={currentItemRemark}
-                                                    onChange={e => setCurrentItemRemark(e.target.value)}
-                                                />
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* MODE B: Manual */}
-                                    {entryMode === 'manual' && (
-                                        <>
-                                            <div className="grid grid-cols-3 gap-3">
-                                                <div>
-                                                    <label className="text-[10px] text-gray-500 block mb-1 uppercase font-bold">Layer</label>
-                                                    <select
-                                                        value={currentItemLayer}
-                                                        onChange={(e) => setCurrentItemLayer(e.target.value as ProductLayer)}
-                                                        className="w-full bg-[#121215] border border-white/10 rounded-lg text-sm px-2 py-1.5 text-white outline-none focus:border-blue-500/50"
-                                                    >
-                                                        {PRODUCT_LAYERS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
-                                                    </select>
-                                                </div>
-                                                <div>
-                                                    <label className="text-[10px] text-gray-500 block mb-1 uppercase font-bold">Material</label>
-                                                    <select
-                                                        value={currentItemMaterial}
-                                                        onChange={(e) => setCurrentItemMaterial(e.target.value as ProductMaterial)}
-                                                        className="w-full bg-[#121215] border border-white/10 rounded-lg text-sm px-2 py-1.5 text-white outline-none focus:border-blue-500/50"
-                                                    >
-                                                        {PRODUCT_MATERIALS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-                                                    </select>
-                                                </div>
-                                                <div>
-                                                    <label className="text-[10px] text-gray-500 block mb-1 uppercase font-bold">Size</label>
-                                                    <select
-                                                        value={currentItemSize}
-                                                        onChange={(e) => setCurrentItemSize(e.target.value as ProductSize)}
-                                                        className="w-full bg-[#121215] border border-white/10 rounded-lg text-sm px-2 py-1.5 text-white outline-none focus:border-blue-500/50"
-                                                    >
-                                                        {PRODUCT_SIZES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                                                    </select>
-                                                </div>
-                                            </div>
-
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                <div>
-                                                    <label className="text-[10px] text-gray-500 block mb-1 uppercase font-bold">Product Desc</label>
-                                                    <input
-                                                        type="text"
-                                                        value={currentItemProductDesc}
-                                                        readOnly
-                                                        className="w-full bg-white/5 border border-white/5 rounded-lg text-sm px-2 py-1.5 text-gray-400 font-mono cursor-not-allowed"
-                                                    />
-                                                    <div className="text-[10px] text-blue-400 mt-1 font-mono">
-                                                        SKU: {currentItemSku}
+                                                )}
+                                                {selectedV2Item && (
+                                                    <div className="mt-2 text-xs text-blue-400 flex items-center gap-2">
+                                                        <CheckCircle size={12} /> Selected: <span className="font-bold">{selectedV2Item.sku}</span>
                                                     </div>
-                                                </div>
-                                                <div>
-                                                    <label className="text-[10px] text-gray-500 block mb-1 uppercase font-bold">Packaging</label>
-                                                    <select
-                                                        value={currentItemPackaging}
-                                                        onChange={(e) => setCurrentItemPackaging(e.target.value as PackagingColor)}
-                                                        className="w-full bg-[#121215] border border-white/10 rounded-lg text-sm px-2 py-1.5 text-white font-bold outline-none focus:border-blue-500/50"
-                                                    >
-                                                        {PACKAGING_COLORS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-                                                    </select>
-                                                </div>
+                                                )}
                                             </div>
-
-                                            {/* Remark Input (Manual Mode) */}
-                                            <div>
-                                                <label className="text-[10px] text-gray-500 block mb-1 uppercase font-bold">Remark</label>
-                                                <input
-                                                    type="text"
-                                                    placeholder="Any special requests..."
-                                                    className="w-full bg-[#121215] border border-white/10 rounded-lg text-sm px-3 py-1.5 text-white outline-none focus:border-blue-500/50"
-                                                    value={currentItemRemark}
-                                                    onChange={e => setCurrentItemRemark(e.target.value)}
-                                                />
+                                        ) : (
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                                {/* Manual Selects */}
+                                                <select value={currentItemLayer} onChange={e => setCurrentItemLayer(e.target.value as any)} className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-2 text-xs text-white outline-none">
+                                                    {PRODUCT_LAYERS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+                                                </select>
+                                                <select value={currentItemMaterial} onChange={e => setCurrentItemMaterial(e.target.value as any)} className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-2 text-xs text-white outline-none">
+                                                    {PRODUCT_MATERIALS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+                                                </select>
+                                                <select value={currentItemSize} onChange={e => setCurrentItemSize(e.target.value as any)} className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-2 text-xs text-white outline-none">
+                                                    {PRODUCT_SIZES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+                                                </select>
                                             </div>
-                                        </>
-                                    )}
+                                        )}
 
-                                    {/* Qty & Add (Shared) */}
-                                    <div className="flex items-end gap-3 pt-4 border-t border-white/5">
-                                        <div className="flex-1">
-                                            <label className="text-[10px] text-gray-500 block mb-1 uppercase font-bold">Quantity</label>
+                                        <div className="flex gap-4">
                                             <input
                                                 type="number"
-                                                min="1"
+                                                placeholder="Qty"
+                                                className="w-24 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white font-mono focus:border-blue-500/50 outline-none"
                                                 value={currentItemQty}
                                                 onChange={e => setCurrentItemQty(Number(e.target.value))}
-                                                className="w-full bg-[#121215] border border-white/10 rounded-lg text-sm px-3 py-1.5 text-white outline-none focus:border-blue-500/50 font-mono"
-                                                placeholder={entryMode === 'search' ? 'Units' : 'Rolls'}
                                             />
+                                            <button
+                                                onClick={handleAddItem}
+                                                className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl font-bold text-sm transition-all"
+                                            >
+                                                Add Item
+                                            </button>
                                         </div>
-                                        <button
-                                            onClick={handleAddItem}
-                                            className="px-6 py-1.5 bg-green-600 hover:bg-green-500 text-white text-sm rounded-lg font-bold transition-all shadow-lg hover:shadow-green-900/30 flex items-center gap-2"
-                                        >
-                                            <Plus size={16} /> Add
-                                        </button>
                                     </div>
                                 </div>
 
-                                {/* Added Items List */}
+                                {/* Items List Table */}
                                 <div className="mt-4 space-y-2">
                                     {newOrderItems.map((item, idx) => (
-                                        <div key={idx} className="flex justify-between items-center bg-[#121215] px-3 py-2 rounded-lg border border-white/5 hover:border-white/10 transition-colors">
-                                            <div className="flex flex-col">
-                                                <span className="text-sm text-gray-300 font-bold">{item.product}</span>
-                                                {item.sku && <span className="text-[10px] text-gray-500 font-mono">{item.sku}</span>}
-                                                <span className="text-xs text-gray-500">
-                                                    {item.packaging ? `Package: ${item.packaging}` : ''} {item.size ? `(${item.size})` : ''}
-                                                </span>
-                                                {item.remark && (
-                                                    <span className="text-xs text-yellow-500/80 italic mt-0.5">
-                                                        Note: {item.remark}
-                                                    </span>
-                                                )}
+                                        <div key={idx} className="flex justify-between items-center p-3 bg-slate-900 border border-slate-800 rounded-lg group">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded bg-slate-800 flex items-center justify-center text-slate-500 font-bold text-xs">
+                                                    {idx + 1}
+                                                </div>
+                                                <div>
+                                                    <div className="text-sm font-bold text-slate-200">{item.product}</div>
+                                                    <div className="text-xs text-slate-500">{item.sku}</div>
+                                                </div>
                                             </div>
                                             <div className="flex items-center gap-4">
-                                                <span className="font-mono font-bold text-white bg-white/5 px-2 py-0.5 rounded text-xs">{item.quantity}</span>
-                                                <button onClick={() => handleRemoveItem(idx)} className="text-red-400 hover:text-red-300 transition-colors p-1 hover:bg-red-500/10 rounded">
-                                                    <X size={14} />
+                                                <div className="font-mono text-sm text-blue-400 font-bold">{item.quantity} units</div>
+                                                <button onClick={() => handleRemoveItem(idx)} className="text-slate-600 hover:text-red-400 transition-colors">
+                                                    <X size={16} />
                                                 </button>
                                             </div>
                                         </div>
                                     ))}
-                                    {newOrderItems.length === 0 && (
-                                        <div className="text-center py-4 text-gray-600 text-xs italic">
-                                            No items loaded yet. Use the tool above to add items.
-                                        </div>
-                                    )}
                                 </div>
                             </div>
                         </div>
 
-                        <div className="p-6 border-t border-white/5 bg-[#18181b] sticky bottom-0 z-20 flex justify-end gap-3">
-                            <button
-                                onClick={() => setIsCreateModalOpen(false)}
-                                className="px-4 py-2 text-gray-400 hover:text-white transition-colors text-sm font-bold active:scale-95 transform"
-                            >
-                                Cancel
-                            </button>
+                        {/* Modal Footer */}
+                        <div className="p-6 border-t border-slate-800 bg-slate-900/50 flex justify-end gap-3">
+                            <button onClick={handleCloseModal} className="px-6 py-2 rounded-xl text-slate-400 hover:text-white font-bold transition-colors">Cancel</button>
                             <button
                                 onClick={handleSubmitOrder}
-                                className="px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-lg font-bold shadow-lg shadow-blue-900/40 hover:shadow-blue-900/60 active:scale-95 transform transition-all flex items-center gap-2"
+                                className="px-8 py-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white rounded-xl font-bold shadow-lg shadow-blue-900/30 transition-all active:scale-95"
                             >
-                                <Truck size={16} /> {editingOrderId ? 'Update Order' : 'Assign Driver'}
+                                {editingOrderId ? 'Save Changes' : 'Confirm Order'}
                             </button>
                         </div>
                     </div>
-                </div >
-            )
-            }
-        </div >
+                </div>
+            )}
+        </div>
     );
 };
+
+// Start Icon helper needed for V2 items check mark
+import { Check } from 'lucide-react';
+function CheckCircle({ size, className }: { size?: number, className?: string }) {
+    return <div className={`rounded-full border flex items-center justify-center ${className}`} style={{ width: size, height: size }}>✓</div>;
+}
 
 export default DeliveryOrderManagement;

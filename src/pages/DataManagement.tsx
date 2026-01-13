@@ -3,12 +3,14 @@ import { supabase } from '../services/supabase';
 import Papa from 'papaparse';
 import {
     Search, Plus, Save, Trash2, Database, Truck, Users,
-    AlertCircle, CheckCircle, X, Download, Upload, Cloud, LogOut, FileText,
-    Package, Settings, LayoutGrid, FlaskConical, ChevronRight
+    AlertCircle, CheckCircle, X, Download, Cloud, FileText,
+    Package, Settings, LayoutGrid, FlaskConical, ChevronRight, Sparkles, Loader
 } from 'lucide-react';
-import { useGoogleDrive } from '../hooks/useGoogleDrive';
 import { CommandDeck } from '../components/CommandDeck';
+
 import { AIChatWidget } from '../components/AIChatWidget';
+import { determineZone } from '../utils/logistics';
+
 
 // --- TYPES ---
 type TabType = 'items' | 'machines' | 'vehicles' | 'customers' | 'partners' | 'recipes' | 'factories';
@@ -29,6 +31,277 @@ const TABS = [
     { id: 'recipes', label: 'BOM Recipes', icon: FlaskConical, color: 'text-pink-400', bg: 'bg-pink-500/10' },
 ];
 
+// --- SMART IMPORT MODAL ---
+const SmartImportModal = ({ isOpen, onClose, onImport, activeTab }: any) => {
+    const [text, setText] = useState('');
+    const [preview, setPreview] = useState<any[]>([]);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const fileRef = useRef<HTMLInputElement>(null);
+
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // CSV HANDLING
+        if (file.type === 'text/csv' || file.name.endsWith('.csv')) {
+            Papa.parse(file, {
+                header: true,
+                skipEmptyLines: true,
+                complete: (results) => {
+                    if (results.data && results.data.length > 0) {
+                        // Normalize
+                        const p = results.data.map((r: any) => ({
+                            name: r.name || r.title || r.Name || r['Company Name'],
+                            phone: r.phone || r.Phone || r['Phone Number'],
+                            address: r.address || r.Address || r['Full Address'],
+                            ...r
+                        }));
+                        setPreview(p);
+                    }
+                }
+            });
+            return;
+        }
+
+        // IMAGE HANDLING (SERVER-SIDE VISION)
+        if (file.type.startsWith('image/')) {
+            setIsAnalyzing(true);
+            try {
+                const base64 = await toBase64(file);
+                const result = await analyzeImageWithServer(base64);
+                setPreview(result);
+            } catch (err: any) {
+                alert('AI Error: ' + err.message);
+            } finally {
+                setIsAnalyzing(false);
+            }
+        }
+    };
+
+    const toBase64 = (file: File): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = error => reject(error);
+        });
+    }
+
+    const analyzeImageWithServer = async (base64Data: string) => {
+        // Strip prefix if needed, but server expects full or partial?
+        // Let's send the raw base64 data URL, let server handle splitting or stick to splitting here.
+        // My server code expects stripped base64: `const base64 = imageBase64;` and calls `data: base64`.
+        // Wait, in server.ts I actually wrote: `data: imageBase64`.
+        // So server expects RAW BASE64 (no data:image... prefix).
+        const base64Broken = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
+
+        // Use hardcoded localhost:8080 matching server.ts default
+        const response = await fetch('http://localhost:8080/api/agent/vision', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ imageBase64: base64Broken })
+        });
+
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || 'Server Analysis Failed');
+        }
+        return await response.json();
+    };
+
+    const handleAnalyze = () => {
+        setIsAnalyzing(true);
+        // SIMULATED AI PARSING (Regex Heuristics) for Text
+        setTimeout(() => {
+            const rows = text.split('\n').filter(line => line.trim());
+            const parsed = rows.map(line => {
+                // Heuristic: Try to split by tab, comma, or pipe
+                let parts = line.split(/,|\t|\|/).map(p => p.trim());
+
+                // If only one part, try to regex extract phone numbers
+                if (parts.length === 1) {
+                    // Try "Name Phone Address" pattern
+                    const phoneMatch = line.match(/(\+?6?0\d{1,2}-?\d{7,8})/);
+                    if (phoneMatch) {
+                        const phone = phoneMatch[0];
+                        const [name, address] = line.split(phone).map(p => p.trim());
+                        return { name, phone, address, raw: line };
+                    }
+                    return { name: line, raw: line };
+                }
+
+                if (activeTab === 'customers') {
+                    // Assume order: Name, Phone, Address OR Name, Address, Phone
+                    const [p1, p2, p3] = parts;
+                    // Check if p2 looks like phone
+                    if (p2 && (p2.startsWith('0') || p2.startsWith('+'))) {
+                        return { name: p1, phone: p2, address: p3, raw: line };
+                    }
+                    // Check if p3 looks like phone
+                    if (p3 && (p3.startsWith('0') || p3.startsWith('+'))) {
+                        return { name: p1, address: p2, phone: p3, raw: line };
+                    }
+                    return { name: p1, address: p2, phone: '', raw: line };
+                }
+
+                return { col1: parts[0], col2: parts[1], col3: parts[2], raw: line };
+            });
+
+            setPreview(parsed);
+            setIsAnalyzing(false);
+        }, 800);
+    };
+
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="bg-[#0c0c0e] border border-white/10 w-full max-w-3xl rounded-3xl p-8 shadow-2xl flex flex-col max-h-[90vh] relative overflow-hidden ring-1 ring-white/5">
+
+                {/* Background Decor */}
+                <div className="absolute top-0 right-0 w-64 h-64 bg-pink-600/10 rounded-full blur-[100px] pointer-events-none" />
+                <div className="absolute bottom-0 left-0 w-64 h-64 bg-indigo-600/10 rounded-full blur-[100px] pointer-events-none" />
+
+                {/* Header */}
+                <div className="flex justify-between items-start mb-8 z-10">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-pink-500 to-rose-600 flex items-center justify-center shadow-lg shadow-pink-500/20 ring-1 ring-white/20">
+                            <Sparkles size={24} className="text-white animate-pulse" />
+                        </div>
+                        <div>
+                            <h3 className="text-2xl font-bold text-white tracking-tight">AI Smart Import</h3>
+                            <p className="text-sm text-gray-400 font-medium">Auto-structure data from any source</p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        className="p-2 hover:bg-white/10 rounded-full transition-colors text-gray-500 hover:text-white"
+                    >
+                        <X size={24} />
+                    </button>
+                </div>
+
+                {/* Main Content */}
+                <div className="flex-1 overflow-hidden flex flex-col gap-6 z-10">
+                    {preview.length === 0 ? (
+                        <div className="flex flex-col h-full gap-6">
+                            {/* DROP ZONE */}
+                            <div
+                                onClick={() => fileRef.current?.click()}
+                                className="h-40 border-2 border-dashed border-white/10 hover:border-pink-500/50 bg-white/[0.02] hover:bg-pink-500/[0.02] rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all group overflow-hidden relative"
+                            >
+                                <div className="absolute inset-0 bg-gradient-to-br from-transparent to-pink-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                <div className="p-4 rounded-full bg-white/5 group-hover:bg-pink-500/10 mb-3 transition-colors ring-1 ring-white/5">
+                                    <Cloud size={32} className="text-gray-400 group-hover:text-pink-400 transition-colors" />
+                                </div>
+                                <p className="text-sm font-bold text-gray-300 group-hover:text-white transition-colors">
+                                    Drop CSV, Excel, or Photo here
+                                </p>
+                                <p className="text-xs text-gray-500 mt-1">Supports .csv, .xlsx, .jpg, .png</p>
+                                <input type="file" ref={fileRef} className="hidden" accept=".csv, .jpg, .jpeg, .png, .webp" onChange={handleFileUpload} />
+                            </div>
+
+                            {/* DIVIDER */}
+                            <div className="flex items-center gap-4">
+                                <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent flex-1" />
+                                <span className="text-xs text-gray-500 font-bold uppercase tracking-widest">OR PASTE TEXT</span>
+                                <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent flex-1" />
+                            </div>
+
+                            {/* TEXT AREA */}
+                            <div className="flex-1 relative">
+                                <textarea
+                                    value={text}
+                                    onChange={e => setText(e.target.value)}
+                                    placeholder={`Name | Phone | Address\n\nExample:\nAli Baba | 012-3456789 | 123 Jalan Ampang`}
+                                    className="w-full h-full bg-[#18181b] hover:bg-[#1c1c20] focus:bg-[#18181b] border border-white/10 hover:border-white/20 focus:border-pink-500/50 rounded-2xl p-5 text-sm text-gray-200 focus:outline-none resize-none font-mono transition-all leading-relaxed"
+                                />
+                                <div className="absolute bottom-4 right-4 text-xs text-gray-600 bg-black/40 px-2 py-1 rounded backdrop-blur-sm pointer-events-none">
+                                    AI Parsing Enabled
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex-1 overflow-hidden bg-[#18181b] border border-white/10 rounded-2xl shadow-inner flex flex-col">
+                            {/* Table Header */}
+                            <div className="bg-white/5 p-4 border-b border-white/5 flex gap-4 text-xs font-bold text-gray-400 uppercase tracking-wider">
+                                <div className="w-1/4">Name</div>
+                                <div className="w-1/4">Phone</div>
+                                <div className="flex-1">Address</div>
+                                <div className="w-24">Zone</div>
+                            </div>
+                            {/* Table Body */}
+                            <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+                                {preview.map((row, idx) => (
+                                    <div key={idx} className="flex gap-4 p-3 hover:bg-white/5 rounded-xl transition-colors items-center text-sm group">
+                                        <div className="w-1/4 font-bold text-white truncate">{row.name}</div>
+                                        <div className="w-1/4 text-gray-400 font-mono text-xs">{row.phone}</div>
+                                        <div className="flex-1 text-gray-300 truncate text-xs" title={row.address}>{row.address}</div>
+                                        <div className="w-24">
+                                            <span className={`text-[10px] px-2 py-1 rounded-full font-bold border ${!row.address ? 'bg-gray-800 text-gray-500 border-transparent' :
+                                                determineZone(row.address) === 'North' ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' :
+                                                    determineZone(row.address) === 'South' ? 'bg-orange-500/20 text-orange-300 border-orange-500/30' :
+                                                        'bg-purple-500/20 text-purple-300 border-purple-500/30'
+                                                }`}>
+                                                {row.address ? determineZone(row.address) : 'N/A'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Footer Actions */}
+                <div className="mt-8 flex justify-end gap-3 z-10 border-t border-white/5 pt-6">
+                    {preview.length > 0 && (
+                        <button
+                            onClick={() => { setPreview([]); setText(''); }}
+                            className="px-5 py-2.5 text-gray-400 hover:text-white font-bold text-sm transition-colors hover:bg-white/5 rounded-xl"
+                        >
+                            Reset
+                        </button>
+                    )}
+
+                    {preview.length === 0 ? (
+                        <button
+                            onClick={handleAnalyze}
+                            disabled={!text.trim() || isAnalyzing}
+                            className={`
+                                h-12 px-8 bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 
+                                text-white rounded-xl font-bold text-sm flex items-center gap-2 shadow-lg shadow-pink-900/20 
+                                ring-1 ring-white/20 transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed
+                                ${isAnalyzing ? 'animate-pulse cursor-wait' : ''}
+                            `}
+                        >
+                            {isAnalyzing ? (
+                                <>
+                                    <Loader size={18} className="animate-spin" />
+                                    <span>Processing Image/Text...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <Sparkles size={18} />
+                                    <span>Analyze Data</span>
+                                </>
+                            )}
+                        </button>
+                    ) : (
+                        <button
+                            onClick={() => onImport(preview)}
+                            className="h-12 px-8 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white rounded-xl font-bold text-sm flex items-center gap-2 shadow-lg shadow-green-900/20 ring-1 ring-white/20 transition-all transform active:scale-95"
+                        >
+                            <CheckCircle size={18} />
+                            Import {preview.length} Records
+                        </button>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 export default function DataManagement() {
     // STATE
     const [activeTab, setActiveTab] = useState<TabType>('items');
@@ -39,24 +312,10 @@ export default function DataManagement() {
     const [form, setForm] = useState<any>({});
     const [isDirty, setIsDirty] = useState(false);
 
-    // NOTIFICATION
-    const { connectToDrive, disconnectFromDrive, isAuthenticated, isReady, uploadFile, listFiles, downloadFile, error: driveError, debugStatus } = useGoogleDrive();
-    const [driveFiles, setDriveFiles] = useState<any[]>([]);
-    const [showDrivePicker, setShowDrivePicker] = useState(false);
-    const [driveLoading, setDriveLoading] = useState(false);
+    // Smart Import State
+    const [showSmartExport, setShowSmartImport] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [notification, setNotification] = useState<{ msg: string, type: 'success' | 'error' } | null>(null);
-
-    // GLOBAL API KEY MANAGEMENT
-    const [apiKey, setApiKey] = useState(() => localStorage.getItem('google_api_key') || '');
-    const [showKeyInput, setShowKeyInput] = useState(false);
-
-    const handleSaveKey = () => {
-        localStorage.setItem('google_api_key', apiKey);
-        setShowKeyInput(false);
-        showToast("Gemini API Key saved!", 'success');
-        setTimeout(() => window.location.reload(), 500); // Reload to apply new key context if needed
-    };
 
     const showToast = (msg: string, type: 'success' | 'error') => {
         setNotification({ msg, type });
@@ -74,7 +333,7 @@ export default function DataManagement() {
 
             switch (activeTab) {
                 case 'items':
-                    query = supabase.from('master_items_v2').select('*').order('sku').limit(200);
+                    query = supabase.from('master_items_v2').select('*').order('sku').limit(1000);
                     mapFn = (i) => ({ ...i, id: i.sku, title: i.name, subtitle: i.sku });
                     break;
                 case 'vehicles':
@@ -82,7 +341,7 @@ export default function DataManagement() {
                     mapFn = (i) => ({ ...i, id: i.id, title: i.plate_number, subtitle: `${i.max_volume_m3}m³ • ${i.status}` });
                     break;
                 case 'customers':
-                    query = supabase.from('sys_customers').select('*').order('name').limit(200);
+                    query = supabase.from('sys_customers').select('*').order('name').limit(1000);
                     mapFn = (i) => ({ ...i, id: i.id, title: i.name, subtitle: i.zone });
                     break;
                 case 'machines':
@@ -94,7 +353,7 @@ export default function DataManagement() {
                     mapFn = (i) => ({ ...i, id: i.partner_id, title: i.name, subtitle: i.type });
                     break;
                 case 'recipes':
-                    query = supabase.from('bom_headers_v2').select('*, bom_items_v2(*)').order('created_at', { ascending: false }).limit(50);
+                    query = supabase.from('bom_headers_v2').select('*, bom_items_v2(*)').order('created_at', { ascending: false }).limit(1000);
                     mapFn = (i) => ({ ...i, id: i.recipe_id, title: i.product_sku, subtitle: `${i.bom_items_v2?.length || 0} Ingredients` });
                     break;
                 case 'factories':
@@ -239,6 +498,58 @@ export default function DataManagement() {
         }
     };
 
+    // Unified Import Handler (Called by CSV or Smart Paste)
+    const executeBatchImport = async (rows: any[]) => {
+        if (rows.length === 0) return;
+
+        try {
+            setLoading(true);
+            let table = '';
+            switch (activeTab) {
+                case 'items': table = 'master_items_v2'; break;
+                case 'vehicles': table = 'sys_vehicles'; break;
+                case 'customers': table = 'sys_customers'; break;
+                case 'machines': table = 'sys_machines_v2'; break;
+                case 'partners': table = 'crm_partners_v2'; break;
+                case 'recipes': table = 'bom_headers_v2'; break;
+                case 'factories': table = 'sys_factories_v2'; break;
+            }
+
+            // AI ENRICHMENT: Auto-Fill Zone for Customers if missing
+            let finalRows = rows;
+            if (activeTab === 'customers') {
+                finalRows = rows.map((r: any) => {
+                    // Normalize if coming from Smart Paste vs CSV (CSV keys lowercased by PapaParse usually, Smart Paste keys fixed)
+                    const name = r.name;
+                    const address = r.address;
+                    const phone = r.phone;
+
+                    // Infer Zone
+                    let zone = r.zone;
+                    if (!zone && address) zone = determineZone(address);
+
+                    return {
+                        name, address, phone, zone,
+                        // Customer ID auto-gen unless provided
+                        id: undefined
+                    };
+                }).filter((r: any) => r.name);
+            }
+
+            const { error } = await supabase.from(table).upsert(finalRows);
+            if (error) throw error;
+
+            showToast(`Successfully imported ${finalRows.length} records!`, 'success');
+            fetchData();
+            setShowSmartImport(false); // Close modal
+        } catch (err: any) {
+            showToast('Import Failed: ' + err.message, 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -251,6 +562,7 @@ export default function DataManagement() {
         Papa.parse(file as any, {
             header: true,
             skipEmptyLines: true,
+            transformHeader: (h) => h.trim(), // Remove whitespace/BOM from headers
             complete: async (results) => {
                 const rows = results.data;
                 if (!rows || rows.length === 0) {
@@ -258,32 +570,9 @@ export default function DataManagement() {
                     return;
                 }
 
-                if (!confirm(`Ready to import ${rows.length} records into ${activeTab}?`)) return;
-
-                try {
-                    setLoading(true);
-                    let table = '';
-                    switch (activeTab) {
-                        case 'items': table = 'master_items_v2'; break;
-                        case 'vehicles': table = 'sys_vehicles'; break;
-                        case 'customers': table = 'sys_customers'; break;
-                        case 'machines': table = 'sys_machines_v2'; break;
-                        case 'partners': table = 'crm_partners_v2'; break;
-                        case 'recipes': table = 'bom_headers_v2'; break;
-                        case 'factories': table = 'sys_factories_v2'; break;
-                    }
-
-                    const { error } = await supabase.from(table).upsert(rows);
-                    if (error) throw error;
-
-                    showToast(`Successfully imported ${rows.length} records`, 'success');
-                    fetchData();
-                    setShowDrivePicker(false); // Close picker if open
-                } catch (err: any) {
-                    showToast('Import Failed: ' + err.message, 'error');
-                } finally {
-                    setLoading(false);
-                }
+                // Map CSV headers to standard if needed (basic normalization)
+                // For now passing raw rows to executeBatchImport which handles normalization for customers
+                executeBatchImport(rows);
             },
             error: (err) => {
                 showToast('Parse Error: ' + err.message, 'error');
@@ -292,45 +581,7 @@ export default function DataManagement() {
     }
 
     // --- DRIVE ACTIONS ---
-    const handleDriveUpload = async () => {
-        if (!filteredData || filteredData.length === 0) return showToast('No data to backup', 'error');
-        setDriveLoading(true);
-        try {
-            const csv = Papa.unparse(filteredData.map(({ id, title, subtitle, ...rest }) => ({ id, ...rest })));
-            const fileName = `${activeTab}_backup_${new Date().toISOString().slice(0, 10)}.csv`;
-            await uploadFile(csv, fileName);
-            showToast('Backup uploaded to Google Drive!', 'success');
-        } catch (err: any) {
-            showToast('Upload Failed: ' + err.message, 'error');
-        } finally {
-            setDriveLoading(false);
-        }
-    };
 
-    const handleDriveList = async () => {
-        setDriveLoading(true);
-        try {
-            const files = await listFiles();
-            setDriveFiles(files || []);
-            setShowDrivePicker(true);
-        } catch (err: any) {
-            showToast('Failed to list files: ' + err.message, 'error');
-        } finally {
-            setDriveLoading(false);
-        }
-    };
-
-    const handleDriveSelect = async (fileId: string) => {
-        setDriveLoading(true);
-        try {
-            const content = await downloadFile(fileId);
-            parseAndImport(content);
-        } catch (err: any) {
-            showToast('Download Failed: ' + err.message, 'error');
-        } finally {
-            setDriveLoading(false);
-        }
-    };
 
     // FILTER
     const filteredData = useMemo(() => {
@@ -366,9 +617,16 @@ export default function DataManagement() {
     return (
         <div className="h-full bg-[#09090b] flex flex-col md:flex-row text-slate-300 font-sans overflow-hidden relative">
 
+            <SmartImportModal
+                isOpen={showSmartExport}
+                onClose={() => setShowSmartImport(false)}
+                activeTab={activeTab}
+                onImport={executeBatchImport}
+            />
+
             {/* 1. SIDEBAR TABS */}
-            <div className="w-full md:w-20 bg-[#121215] border-r border-white/5 flex md:flex-col items-center py-4 gap-4 overflow-x-auto md:overflow-visible shrink-0 z-20 shadow-xl">
-                <div className="hidden md:flex w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 mb-4 items-center justify-center font-black text-white shadow-lg shadow-indigo-500/20">D</div>
+            <div className="w-full md:w-20 bg-[#121215] border-r border-white/5 flex md::flex-col items-center py-4 gap-4 overflow-x-auto md:overflow-visible shrink-0 z-20 shadow-xl">
+                <div className="hidden md:flex w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 mb-4 items-center justify-center font-black text-white shadow-lg shadow-indigo-500/20">AI</div>
                 {TABS.map(tab => {
                     const Icon = tab.icon;
                     const active = activeTab === tab.id;
@@ -394,9 +652,8 @@ export default function DataManagement() {
             <div className="w-full md:w-80 lg:w-96 bg-[#0c0c0e] border-r border-white/5 flex flex-col z-10">
                 <div className="p-4 border-b border-white/5 flex flex-col gap-3 z-20 bg-[#0c0c0e]">
                     <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-                        {TABS.find(t => t.id === activeTab)?.label}
-                        <span className="text-xs bg-indigo-500 text-white px-1.5 py-0.5 rounded font-bold">v6.1</span>
-                        <span className="text-xs bg-white/10 px-2 py-0.5 rounded-full text-gray-400 font-normal">{data.length}</span>
+                        <Sparkles size={16} className="text-indigo-400 animate-pulse" />
+                        AI Data Hub
                     </h2>
                     <div className="flex flex-col gap-2">
                         <div className="relative group">
@@ -408,53 +665,12 @@ export default function DataManagement() {
                                 placeholder="Search records..."
                             />
                         </div>
-                        {/* DRIVE CONNECT */}
-                        <div className="flex gap-2 items-center">
-                            {!isReady ? (
-                                <div className="text-xs text-gray-500 bg-white/5 px-2 py-1 rounded flex gap-2 items-center min-w-[120px]">
-                                    <span className="animate-spin">⏳</span>
-                                    {driveError ? <span className="text-red-400 font-bold">{driveError}</span> : <span className="text-gray-400">{debugStatus}</span>}
-                                </div>
-                            ) : !isAuthenticated ? (
-                                <button onClick={connectToDrive} className="flex-1 py-2 px-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg flex items-center justify-center gap-2 text-xs font-bold text-gray-400 hover:text-white transition-all">
-                                    <Cloud size={14} /> Connect Google Drive
-                                </button>
-                            ) : (
-                                <div className="flex-1 flex gap-1">
-                                    <button onClick={handleDriveUpload} disabled={driveLoading} className="flex-1 py-2 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 rounded-lg flex items-center justify-center gap-2 text-xs font-bold text-blue-400 transition-all" title="Backup to Drive">
-                                        <Upload size={14} /> Backup
-                                    </button>
-                                    <button onClick={handleDriveList} disabled={driveLoading} className="flex-1 py-2 bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 rounded-lg flex items-center justify-center gap-2 text-xs font-bold text-green-400 transition-all" title="Restore from Drive">
-                                        <Download size={14} /> Restore
-                                    </button>
-                                    <button onClick={disconnectFromDrive} className="px-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-lg text-red-400" title="Disconnect">
-                                        <LogOut size={14} />
-                                    </button>
-                                </div>
-                            )}
-                        </div>
+                        {/* DRIVE CONNECT REMOVED */}
                     </div>
                 </div>
 
                 {/* API KEY CONFIG PANEL */}
-                {showKeyInput && (
-                    <div className="mx-4 mt-2 p-3 bg-indigo-500/10 border border-indigo-500/30 rounded-xl flex flex-col gap-2 animate-in slide-in-from-top-2">
-                        <label className="text-[10px] font-bold text-indigo-300 uppercase">Gemini API Key</label>
-                        <input
-                            type="password"
-                            value={apiKey}
-                            onChange={e => setApiKey(e.target.value)}
-                            placeholder="Paste AIza key here..."
-                            className="bg-[#0c0c0e] border border-indigo-500/30 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none"
-                        />
-                        <button
-                            onClick={handleSaveKey}
-                            className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg transition-colors"
-                        >
-                            Save & Enable AI
-                        </button>
-                    </div>
-                )}
+
 
                 <div className="flex gap-2 pt-1 border-t border-white/5 mt-1">
                     {/* Hidden File Input */}
@@ -472,27 +688,16 @@ export default function DataManagement() {
                     >
                         <Plus size={16} /> New
                     </button>
+                    {/* SMART IMPORT BUTTON */}
                     <button
-                        onClick={handleExport}
-                        className="p-2.5 rounded-xl border border-white/20 bg-white/5 hover:bg-green-500/20 hover:border-green-500/50 text-gray-300 hover:text-green-400 text-sm font-bold flex items-center justify-center gap-2 transition-all"
-                        title="Export CSV"
+                        onClick={() => setShowSmartImport(true)}
+                        className="p-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white shadow-lg shadow-pink-900/40 hover:shadow-pink-600/30 text-sm font-bold flex items-center justify-center gap-2 transition-all group ring-1 ring-white/20"
+                        title="Smart Import (Paste Data)"
                     >
-                        <Download size={16} />
+                        <Sparkles size={16} className="group-hover:animate-spin" />
+                        <span className="hidden md:inline">Smart Import</span>
                     </button>
-                    <button
-                        onClick={handleImportClick}
-                        className="p-2.5 rounded-xl border border-white/20 bg-white/5 hover:bg-orange-500/20 hover:border-orange-500/50 text-gray-300 hover:text-orange-400 text-sm font-bold flex items-center justify-center gap-2 transition-all"
-                        title="Import CSV"
-                    >
-                        <Upload size={16} />
-                    </button>
-                    <button
-                        onClick={() => setShowKeyInput(!showKeyInput)}
-                        className="p-2.5 rounded-xl border border-white/20 bg-white/5 hover:bg-indigo-500/20 hover:border-indigo-500/50 text-gray-300 hover:text-indigo-400 text-sm font-bold flex items-center justify-center gap-2 transition-all"
-                        title="Configure AI Key"
-                    >
-                        <Settings size={16} />
-                    </button>
+
                 </div>
             </div>
 
@@ -603,6 +808,7 @@ export default function DataManagement() {
 
                                         <InputGroup label="Phone Number" value={form.phone} onChange={(v: any) => setForm({ ...form, phone: v })} />
                                         <InputGroup label="Full Address" value={form.address} onChange={(v: any) => setForm({ ...form, address: v })} colSpan={2} />
+                                        <InputGroup label="Legacy Code" value={form.customer_code} onChange={(v: any) => setForm({ ...form, customer_code: v })} placeholder="e.g. 302-C0001" />
 
                                         <div className="col-span-2 grid grid-cols-2 gap-6 p-4 bg-white/5 rounded-xl border border-white/5">
                                             <h4 className="col-span-2 text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-2"><Truck size={12} /> GPS Coordination</h4>
@@ -684,37 +890,7 @@ export default function DataManagement() {
             }
 
 
-            {/* DRIVE PICKER MODAL */}
-            {
-                showDrivePicker && (
-                    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                        <div className="bg-[#121215] border border-white/10 w-full max-w-md rounded-2xl p-6 shadow-2xl">
-                            <div className="flex justify-between items-center mb-4">
-                                <h3 className="text-xl font-bold text-white flex items-center gap-2"><Cloud size={20} className="text-green-400" /> Select File</h3>
-                                <button onClick={() => setShowDrivePicker(false)}><X size={20} className="text-gray-500 hover:text-white" /></button>
-                            </div>
-                            <div className="max-h-[300px] overflow-y-auto space-y-2">
-                                {driveLoading ? (
-                                    <div className="text-center py-8 text-gray-500 animate-pulse">Fetching files...</div>
-                                ) : driveFiles.length === 0 ? (
-                                    <div className="text-center py-8 text-gray-500">No CSV files found in Drive.</div>
-                                ) : (
-                                    driveFiles.map(f => (
-                                        <button key={f.id} onClick={() => handleDriveSelect(f.id)} className="w-full p-3 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl flex items-center gap-3 text-left transition-colors">
-                                            <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center text-green-400"><FileText size={16} /></div>
-                                            <div className="flex-1 truncate">
-                                                <div className="text-sm font-bold text-gray-200 truncate">{f.name}</div>
-                                                <div className="text-xs text-gray-500">ID: {f.id}</div>
-                                            </div>
-                                            <Download size={14} className="text-gray-500" />
-                                        </button>
-                                    ))
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                )
-            }
+
         </div >
     );
 }

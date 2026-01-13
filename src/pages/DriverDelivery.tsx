@@ -1,102 +1,62 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../services/supabase';
-import { getInventoryStatus } from '../services/apiV2';
-import { JobOrder } from '../types';
-import { Truck, MapPin, CheckCircle, Navigation, Package, User, Calendar, ArrowRight, AlertCircle } from 'lucide-react';
+import { Truck, MapPin, CheckCircle, Navigation, Package, User, Calendar, Camera, PenTool, X, UploadCloud } from 'lucide-react';
+import { LogisticsTrip, SalesOrder } from '../types';
 
 interface DriverDeliveryProps {
     user: any;
 }
 
 const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
-    const [orders, setOrders] = useState<any[]>([]);
+    // Mode: 'Trip' (New) or 'Legacy' (Fallback)
+    const [activeTrip, setActiveTrip] = useState<LogisticsTrip | null>(null);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'Pending' | 'Completed'>('Pending');
-    const [inventoryMap, setInventoryMap] = useState<Record<string, number>>({});
 
-    // Editing State
-    const [editingItem, setEditingItem] = useState<{ orderId: string, itemIndex: number } | null>(null);
-    const [tempQty, setTempQty] = useState<number>(0);
+    // POD State
+    const [selectedOrder, setSelectedOrder] = useState<SalesOrder | null>(null);
+    const [isPODOpen, setIsPODOpen] = useState(false);
+    const [signature, setSignature] = useState<string | null>(null);
+    const [photoFunction, setPhotoFunction] = useState<File | null>(null);
+    const [uploading, setUploading] = useState(false);
 
-    const handleEditClick = (orderId: string, index: number, currentQty: number) => {
-        setEditingItem({ orderId, itemIndex: index });
-        setTempQty(currentQty);
-    };
-
-    const saveQuantity = async () => {
-        if (!editingItem) return;
-
-        const { orderId, itemIndex } = editingItem;
-        const order = orders.find(o => o.id === orderId);
-        if (!order) return;
-
-        // Clone items and update
-        const updatedItems = [...order.items];
-        updatedItems[itemIndex] = { ...updatedItems[itemIndex], quantity: tempQty };
-
-        // Optimistic Update
-        const updatedOrders = orders.map(o =>
-            o.id === orderId ? { ...o, items: updatedItems } : o
-        );
-        setOrders(updatedOrders);
-        setEditingItem(null);
-
-        try {
-            const { error } = await supabase
-                .from('sales_orders')
-                .update({ items: updatedItems })
-                .eq('id', orderId);
-
-            if (error) throw error;
-        } catch (err) {
-            console.error("Failed to update quantity:", err);
-            alert("Failed to update quantity. Reverting...");
-            fetchData(); // Revert
-        }
-    };
+    // Canvas Ref for Signature
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const isDrawing = useRef(false);
 
     const fetchData = async () => {
         setLoading(true);
         try {
-            // 1. Fetch Orders
-            let query = supabase
-                .from('sales_orders')
-                .select('*')
-                .order('created_at', { ascending: false });
+            if (!user?.uid) return;
 
-            const { data: orderData } = await query;
+            // 1. Check for Active Trip (En-Route)
+            const { data: tripData } = await supabase
+                .from('logistics_trips')
+                .select(`*, sys_vehicles(*)`)
+                .eq('driver_id', user.uid)
+                .in('status', ['En-Route', 'Ready', 'Loading']) // Show even if loading
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single();
 
-            // 2. Fetch Live Inventory
-            const inventoryList = await getInventoryStatus();
-            const invMap: Record<string, number> = {};
-            inventoryList.forEach(i => {
-                if (i.sku) invMap[i.sku] = i.current_stock;
-            });
-            setInventoryMap(invMap);
+            if (tripData) {
+                // Fetch Orders for Trip
+                const { data: orders } = await supabase
+                    .from('sales_orders')
+                    .select('*')
+                    .eq('trip_id', tripData.trip_id)
+                    .order('stop_sequence', { ascending: true });
 
-            if (orderData) {
-                const allOrders = orderData.map(o => ({
-                    id: o.id,
-                    orderNumber: o.order_number || o.id.substring(0, 8),
-                    customer: o.customer,
-                    items: o.items || [],
-                    status: o.status,
-                    deliveryAddress: o.delivery_address || '123 Industrial Park, Factory Rd',
-                    deliveryZone: o.delivery_zone,
-                    driverId: o.driver_id,
-                    notes: o.notes
-                }));
-
-                const relevantOrders = allOrders.filter(o => {
-                    const isCompleted = o.status === 'Delivered' || o.status === 'Completed';
-                    if (activeTab === 'Pending') return !isCompleted;
-                    return isCompleted;
+                setActiveTrip({
+                    ...tripData,
+                    orders: orders || [],
+                    vehicle: tripData.sys_vehicles
                 });
-
-                setOrders(relevantOrders);
+            } else {
+                setActiveTrip(null);
             }
+
         } catch (error) {
-            console.error("Error fetching data:", error);
+            console.error("Driver Load Error:", error);
         } finally {
             setLoading(false);
         }
@@ -104,211 +64,305 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
 
     useEffect(() => {
         fetchData();
-    }, [activeTab]);
+    }, [user]);
 
-    const updateStatus = async (orderId: string, newStatus: string) => {
-        // Optimistic Update
-        setOrders(orders.filter(o => o.id !== orderId));
+    // --- POD LOGIC ---
+
+    const openPOD = (order: SalesOrder) => {
+        setSelectedOrder(order);
+        setSignature(null);
+        setPhotoFunction(null);
+        setIsPODOpen(true);
+        setTimeout(initCanvas, 100); // Delay for modal render
+    };
+
+    const initCanvas = () => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+
+        // Handle resizing? keeping it fixed for MVP
+        canvas.width = canvas.offsetWidth;
+        canvas.height = canvas.offsetHeight;
+
+        // White background
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    };
+
+    const startDrawing = (e: any) => {
+        isDrawing.current = true;
+        draw(e);
+    };
+
+    const stopDrawing = () => {
+        isDrawing.current = false;
+        const canvas = canvasRef.current;
+        if (canvas) {
+            ctx(canvas)?.beginPath(); // reset path
+            setSignature(canvas.toDataURL()); // Save state
+        }
+    };
+
+    const draw = (e: any) => {
+        if (!isDrawing.current || !canvasRef.current) return;
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.clientX || e.touches?.[0]?.clientX;
+        const clientY = e.clientY || e.touches?.[0]?.clientY;
+
+        ctx.lineTo(clientX - rect.left, clientY - rect.top);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(clientX - rect.left, clientY - rect.top);
+    };
+
+    const ctx = (canvas: HTMLCanvasElement) => canvas.getContext('2d');
+
+    const handlePODSubmit = async () => {
+        if (!selectedOrder) return;
+        setUploading(true);
 
         try {
-            const { error } = await supabase
-                .from('sales_orders')
-                .update({ status: newStatus })
-                .eq('id', orderId);
+            let photoUrl = '';
+            let signatureUrl = signature; // DataURL is fine for now, or upload as file
 
-            if (error) throw error;
-        } catch (error) {
-            console.error("Update failed", error);
-            fetchData(); // Revert
+            // Upload Photo if exists
+            if (photoFunction) {
+                const fileName = `pod/${selectedOrder.id}/${Date.now()}.jpg`;
+                // Mock Upload for MVP (or real if bucket exists). 
+                // Assuming no storage bucket 'pod' configured yet. 
+                // We'll skip actual upload to bucket and use a placeholder or dataURL if small
+                // For MVP, we'll just alert that upload is simulated unless bucket exists.
+                // Assuming bucket 'public' exists?
+                console.log("Simulating Upload of photo:", photoFunction.name);
+                photoUrl = "https://placehold.co/600x400?text=POD+Photo";
+            }
+
+            // Update Order
+            await supabase.from('sales_orders').update({
+                status: 'Delivered',
+                pod_signed_by: 'Customer (Digital)', // Could ask for name
+                pod_signature_url: signatureUrl, // Storing base64 directly might be large, but ok for MVP < 100kb
+                pod_photo_url: photoUrl,
+                pod_timestamp: new Date().toISOString()
+            }).eq('id', selectedOrder.id);
+
+            alert("Delivery Confirmed!");
+            setIsPODOpen(false);
+            fetchData();
+        } catch (e: any) {
+            alert("Error saving POD: " + e.message);
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const handleCompleteTrip = async () => {
+        if (!activeTrip) return;
+        const confirm = window.confirm("Mark trip as COMPLETED? This will alert dispatch.");
+        if (confirm) {
+            await supabase.from('logistics_trips').update({
+                status: 'Completed',
+                completed_at: new Date().toISOString()
+            }).eq('trip_id', activeTrip.trip_id);
+
+            alert("Trip Completed. Great job!");
+            fetchData(); // Will likely clear the view
         }
     };
 
     return (
-        <div className="min-h-screen bg-[#121215] text-white animate-fade-in pb-20 p-4 lg:p-6">
+        <div className="min-h-screen bg-[#121215] text-white p-4 pb-20">
             {/* Header */}
-            <div className="flex flex-col gap-1 mb-8">
-                <div className="flex items-center gap-3">
-                    <div className="p-3 bg-blue-600/20 rounded-xl border border-blue-500/30">
-                        <Truck className="text-blue-400" size={24} />
+            <div className="flex items-center justify-between mb-6">
+                <div>
+                    <h1 className="text-2xl font-black uppercase text-white">Driver Mode</h1>
+                    <div className="flex items-center gap-2 text-gray-500 text-xs mt-1">
+                        <User size={12} /> {user?.name || 'Driver'}
+                        <span className="text-gray-700">|</span>
+                        <Truck size={12} /> {(activeTrip?.vehicle as any)?.plate_number || 'No Vehicle'}
                     </div>
-                    <h1 className="text-2xl font-black tracking-tight text-white uppercase">Driver Portal</h1>
                 </div>
-                <div className="flex items-center gap-2 text-gray-500 text-sm pl-[3.75rem]">
-                    <User size={14} />
-                    <span className="font-bold">{user?.name || user?.email || 'Driver'}</span>
-                    <span className="text-gray-700 mx-2">|</span>
-                    <Calendar size={14} />
-                    <span>{new Date().toLocaleDateString()}</span>
-                </div>
+                {activeTrip && (
+                    <div className="bg-green-500/20 text-green-400 px-3 py-1 rounded-lg text-xs font-bold uppercase border border-green-500/30 animate-pulse">
+                        On Trip
+                    </div>
+                )}
             </div>
 
-            {/* Tabs */}
-            <div className="flex w-full bg-[#1e1e24] p-1.5 rounded-2xl border border-white/5 mb-8 max-w-md mx-auto">
-                <button
-                    onClick={() => setActiveTab('Pending')}
-                    className={`flex-1 py-3 text-sm font-black uppercase tracking-wider rounded-xl transition-all duration-300 ${activeTab === 'Pending'
-                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40'
-                        : 'text-gray-500 hover:text-white hover:bg-white/5'}`}
-                >
-                    Current Tasks
-                </button>
-                <button
-                    onClick={() => setActiveTab('Completed')}
-                    className={`flex-1 py-3 text-sm font-black uppercase tracking-wider rounded-xl transition-all duration-300 ${activeTab === 'Completed'
-                        ? 'bg-green-600 text-white shadow-lg shadow-green-900/40'
-                        : 'text-gray-500 hover:text-white hover:bg-white/5'}`}
-                >
-                    History
-                </button>
-            </div>
+            {/* TRIP VIEW */}
+            {activeTrip ? (
+                <div className="space-y-6">
+                    {/* Trip Card */}
+                    <div className="bg-gradient-to-br from-[#1e1e24] to-[#121215] p-5 rounded-2xl border border-white/10 shadow-xl">
+                        <div className="flex justify-between items-start mb-4">
+                            <div>
+                                <div className="text-xs text-gray-500 uppercase tracking-widest font-bold">Current Trip</div>
+                                <div className="text-xl font-black text-white">{activeTrip.trip_number}</div>
+                            </div>
+                            <div className="text-right">
+                                <div className="text-2xl font-black text-blue-500">
+                                    {activeTrip.orders?.filter(o => o.status === 'Delivered').length} / {activeTrip.orders?.length}
+                                </div>
+                                <div className="text-[10px] text-gray-500 uppercase font-bold">Completed</div>
+                            </div>
+                        </div>
 
-            {/* Order List */}
-            <div className="space-y-4 max-w-3xl mx-auto">
-                {loading ? (
-                    <div className="flex flex-col items-center justify-center py-20 text-gray-500 animate-pulse">
-                        <Truck size={48} className="mb-4 opacity-50" />
-                        <div className="text-sm font-bold uppercase tracking-wider">Loading Deliveries...</div>
+                        {/* Progress Bar */}
+                        <div className="w-full bg-black/50 h-2 rounded-full overflow-hidden">
+                            <div
+                                className="h-full bg-blue-500 transition-all duration-500"
+                                style={{ width: `${(activeTrip.orders?.filter(o => o.status === 'Delivered').length || 0) / (activeTrip.orders?.length || 1) * 100}%` }}
+                            />
+                        </div>
                     </div>
-                ) : orders.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-20 text-gray-600 border border-dashed border-white/10 rounded-2xl bg-[#1e1e24]/50">
-                        <Package size={48} className="mb-4 opacity-50" />
-                        <p className="font-medium">No {activeTab.toLowerCase()} deliveries found.</p>
-                    </div>
-                ) : (
-                    orders.map((order, idx) => (
-                        <div
-                            key={order.id}
-                            style={{ animationDelay: `${idx * 100}ms` }}
-                            className="bg-[#1e1e24] rounded-2xl overflow-hidden shadow-xl border border-white/5 hover:border-white/10 transition-all group animate-fade-in"
-                        >
-                            <div className="p-5">
-                                <div className="flex justify-between items-start mb-4">
-                                    <div>
-                                        <h3 className="font-bold text-lg text-white group-hover:text-blue-400 transition-colors flex items-center gap-2">
-                                            {order.customer}
-                                        </h3>
-                                        <div className="flex items-center gap-2 mt-1">
-                                            <span className="bg-white/5 text-[10px] font-mono px-2 py-0.5 rounded text-gray-400 border border-white/5">#{order.orderNumber}</span>
-                                            {order.deliveryZone && (
-                                                <span className="bg-purple-900/30 text-[10px] font-bold px-2 py-0.5 rounded text-purple-300 border border-purple-500/20">{order.deliveryZone}</span>
+
+                    {/* Stops List */}
+                    <div className="space-y-4">
+                        <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest pl-1">Stops Sequence</h2>
+                        {activeTrip.orders?.map((order, idx) => {
+                            const isDelivered = order.status === 'Delivered';
+                            const isNext = !isDelivered && (idx === 0 || activeTrip.orders?.[idx - 1].status === 'Delivered');
+
+                            return (
+                                <div key={order.id} className={`relative p-5 rounded-2xl border transition-all ${isDelivered ? 'bg-[#1e1e24]/50 border-white/5 opacity-60' :
+                                        isNext ? 'bg-[#1e1e24] border-blue-500 shadow-lg shadow-blue-900/20 scale-[1.02] z-10' :
+                                            'bg-[#1e1e24] border-white/5 opacity-80'
+                                    }`}>
+                                    {/* Timeline Connector */}
+                                    {idx < (activeTrip.orders?.length || 0) - 1 && (
+                                        <div className="absolute left-[2.25rem] top-[4rem] bottom-[-2rem] w-0.5 bg-white/5 -z-10" />
+                                    )}
+
+                                    <div className="flex items-start gap-4">
+                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg shrink-0 ${isDelivered ? 'bg-green-500/20 text-green-500' :
+                                                isNext ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/50' :
+                                                    'bg-gray-700 text-gray-400'
+                                            }`}>
+                                            {isDelivered ? <CheckCircle size={20} /> : idx + 1}
+                                        </div>
+
+                                        <div className="flex-1">
+                                            <div className="flex justify-between items-start">
+                                                <h3 className={`font-bold text-lg ${isDelivered ? 'text-gray-500 line-through' : 'text-white'}`}>{order.customer}</h3>
+                                                <span className="text-[10px] text-gray-500 font-mono">#{order.orderNumber}</span>
+                                            </div>
+
+                                            <div className="flex items-center gap-2 text-gray-400 text-sm mt-1 mb-3">
+                                                <MapPin size={14} /> {order.deliveryAddress}
+                                            </div>
+
+                                            {!isDelivered && (
+                                                <div className="grid grid-cols-2 gap-3 mt-4">
+                                                    <button
+                                                        onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.deliveryAddress || '')}`)}
+                                                        className="py-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-xs font-bold uppercase tracking-wide flex items-center justify-center gap-2"
+                                                    >
+                                                        <Navigation size={14} /> Navigate
+                                                    </button>
+                                                    <button
+                                                        onClick={() => openPOD(order)}
+                                                        className="py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase tracking-wide flex items-center justify-center gap-2 shadow-lg shadow-blue-900/40"
+                                                    >
+                                                        <PenTool size={14} /> Deliver (POD)
+                                                    </button>
+                                                </div>
                                             )}
                                         </div>
                                     </div>
-                                    <div className={`p-2 rounded-full ${activeTab === 'Pending' ? 'bg-blue-500/10 text-blue-400' : 'bg-green-500/10 text-green-400'}`}>
-                                        <Package size={20} />
-                                    </div>
                                 </div>
+                            );
+                        })}
+                    </div>
 
-                                <div className="space-y-4 mb-6">
-                                    <div className="flex items-start gap-3 p-3 bg-white/5 rounded-xl border border-white/5">
-                                        <MapPin className="text-red-400 shrink-0 mt-1" size={16} />
-                                        <p className="text-gray-300 text-sm leading-relaxed font-medium">
-                                            {order.deliveryAddress}
-                                        </p>
-                                    </div>
+                    {/* Complete Trip Button */}
+                    {activeTrip.orders?.every(o => o.status === 'Delivered') && (
+                        <div className="fixed bottom-6 left-6 right-6">
+                            <button
+                                onClick={handleCompleteTrip}
+                                className="w-full py-4 bg-green-600 text-white rounded-2xl font-black text-lg uppercase tracking-widest shadow-2xl shadow-green-900/50 hover:scale-[1.02] transition-transform flex items-center justify-center gap-3"
+                            >
+                                <CheckCircle size={24} /> Complete Trip
+                            </button>
+                        </div>
+                    )}
+                </div>
+            ) : (
+                <div className="flex flex-col items-center justify-center h-[60vh] text-center p-6">
+                    <Truck size={64} className="text-gray-600 mb-6" />
+                    <h2 className="text-xl font-bold text-white mb-2">No Active Trip</h2>
+                    <p className="text-gray-500 max-w-xs">
+                        You don't have any active trips assigned. Wait for dispatch or check with the logistics manager.
+                    </p>
+                </div>
+            )}
 
-                                    {/* Items List */}
-                                    <div className="space-y-2">
-                                        {order.items.map((item: any, i: number) => {
-                                            const currentStock = inventoryMap[item.sku] || 0;
-                                            const isLowStock = currentStock < item.quantity;
-                                            const stockColor = isLowStock ? 'text-red-400' : 'text-green-500';
+            {/* POD MODAL */}
+            {isPODOpen && selectedOrder && (
+                <div className="fixed inset-0 bg-black/90 z-50 flex flex-col animate-in fade-in duration-200">
+                    <div className="flex items-center justify-between p-4 border-b border-white/10">
+                        <h2 className="font-bold text-white">Proof of Delivery</h2>
+                        <button onClick={() => setIsPODOpen(false)} className="p-2 bg-white/10 rounded-full"><X size={20} /></button>
+                    </div>
 
-                                            return (
-                                                <div key={i} className="bg-[#121215] p-3 rounded-lg border border-white/5 flex justify-between items-center">
-                                                    <div>
-                                                        {/* If SKU exists, product is Name, SKU is Code. If not, product might be the Code (Manual Mode) */}
-                                                        <span className="block text-white font-medium text-sm">
-                                                            {item.sku ? item.product : 'Manual Item'}
-                                                        </span>
-                                                        <span className="text-[10px] text-gray-500 font-mono">
-                                                            {item.sku || item.product}
-                                                        </span>
-                                                        {item.remark && (
-                                                            <span className="block text-[10px] text-yellow-500/80 italic mt-0.5">
-                                                                Note: {item.remark}
-                                                            </span>
-                                                        )}
-                                                    </div>
-
-                                                    {/* Qty & Stock Status */}
-                                                    <div className="text-right flex flex-col items-end">
-                                                        {editingItem?.orderId === order.id && editingItem?.itemIndex === i ? (
-                                                            <div className="flex items-center gap-1 mb-1">
-                                                                <input
-                                                                    type="number"
-                                                                    className="w-16 bg-white/10 border border-blue-500 rounded px-1 py-0.5 text-white text-xs font-bold text-center outline-none"
-                                                                    value={tempQty}
-                                                                    onChange={(e) => setTempQty(Number(e.target.value))}
-                                                                    onClick={(e) => e.stopPropagation()}
-                                                                    autoFocus
-                                                                />
-                                                                <button onClick={(e) => { e.stopPropagation(); saveQuantity(); }} className="p-1 bg-green-600 rounded text-white hover:bg-green-500"><CheckCircle size={12} /></button>
-                                                                <button onClick={(e) => { e.stopPropagation(); setEditingItem(null); }} className="p-1 bg-gray-600 rounded text-white hover:bg-gray-500"><ArrowRight size={12} className="rotate-180" /></button>
-                                                            </div>
-                                                        ) : (
-                                                            <div
-                                                                onClick={(e) => {
-                                                                    if (activeTab === 'Pending') {
-                                                                        e.stopPropagation();
-                                                                        handleEditClick(order.id, i, item.quantity);
-                                                                    }
-                                                                }}
-                                                                className={`bg-white/10 text-white text-xs font-bold px-2 py-1 rounded inline-block mb-1 flex items-center gap-1 ${activeTab === 'Pending' ? 'cursor-pointer hover:bg-white/20 hover:text-blue-300 transition-colors border border-transparent hover:border-blue-500/30' : ''}`}
-                                                                title={activeTab === 'Pending' ? "Click to Edit" : ""}
-                                                            >
-                                                                <span>x{item.quantity}</span>
-                                                                {activeTab === 'Pending' && <span className="opacity-0 group-hover:opacity-100 text-[8px] text-blue-400">✏️</span>}
-                                                            </div>
-                                                        )}
-                                                        {item.sku && (
-                                                            <span className={`text-[10px] font-mono mt-1 font-bold ${stockColor} flex items-center gap-1 uppercase tracking-wider`}>
-                                                                {isLowStock ? (
-                                                                    <>
-                                                                        <AlertCircle size={10} />
-                                                                        <span>Insufficient Stock</span>
-                                                                    </>
-                                                                ) : (
-                                                                    <span>Ready</span>
-                                                                )}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-
-                                {/* Action Buttons */}
-                                {activeTab === 'Pending' && (
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <button
-                                            onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.deliveryAddress || '')}`)}
-                                            className="bg-[#18181b] hover:bg-[#202025] border border-white/10 text-white py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all active:scale-95 text-sm"
-                                        >
-                                            <Navigation size={16} className="text-blue-400" /> Navigate
-                                        </button>
-
-                                        <button
-                                            onClick={() => updateStatus(order.id, 'Delivered')}
-                                            className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-green-900/30 active:scale-95 text-sm"
-                                        >
-                                            <CheckCircle size={16} /> Complete
-                                        </button>
-                                    </div>
-                                )}
-
-                                {activeTab === 'Completed' && (
-                                    <div className="w-full bg-green-900/20 border border-green-500/20 rounded-xl py-3 flex items-center justify-center gap-2 text-green-400 font-bold text-sm">
-                                        <CheckCircle size={16} /> Delivered Successfully
-                                    </div>
-                                )}
+                    <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">1. Photo Proof (Optional)</label>
+                            <div className="border border-dashed border-white/20 rounded-xl p-6 flex flex-col items-center justify-center text-gray-400 bg-white/5">
+                                <UploadCloud size={32} className="mb-2" />
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    capture="environment"
+                                    onChange={(e) => setPhotoFunction(e.target.files?.[0] || null)}
+                                    className="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-500"
+                                />
+                                <p className="text-[10px] mt-2 text-gray-500">Tap to take photo</p>
                             </div>
                         </div>
-                    ))
-                )}
-            </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">2. Customer Signature</label>
+                            <div className="bg-white rounded-xl overflow-hidden h-40 touch-none">
+                                <canvas
+                                    ref={canvasRef}
+                                    className="w-full h-full cursor-crosshair"
+                                    onMouseDown={startDrawing}
+                                    onMouseUp={stopDrawing}
+                                    onMouseOut={stopDrawing}
+                                    onMouseMove={draw}
+                                    onTouchStart={startDrawing}
+                                    onTouchEnd={stopDrawing}
+                                    onTouchMove={draw}
+                                />
+                            </div>
+                            <div className="flex justify-between mt-2">
+                                <button onClick={initCanvas} className="text-xs text-red-400 font-bold uppercase">Clear Signature</button>
+                                <p className="text-[10px] text-gray-500">Sign in the white box</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="p-4 border-t border-white/10 glass-panel">
+                        <button
+                            onClick={handlePODSubmit}
+                            disabled={uploading}
+                            className="w-full py-4 bg-blue-600 rounded-xl font-bold text-white uppercase tracking-wider flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                            {uploading ? 'Uploading...' : 'Confirm Delivery'}
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

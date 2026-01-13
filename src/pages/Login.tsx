@@ -389,7 +389,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                                 <div className="pt-6 border-t border-white/5">
                                     <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 text-center">— Quick Demo Access —</label>
                                     <div className="grid grid-cols-4 gap-2">
-                                        {['SuperAdmin', 'Admin', 'Manager', 'Finance', 'HR', 'Sales', 'Operator', 'Driver'].map(role => (
+                                        {['Admin', 'Manager', 'Finance', 'HR', 'Sales', 'Operator', 'Driver'].map(role => (
                                             <button
                                                 key={role}
                                                 onClick={() => handleDemoLogin(role)}
@@ -428,7 +428,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             </div>
 
             <div className="absolute bottom-6 text-center w-full z-10 text-slate-700 text-[10px] tracking-widest uppercase">
-                System v6.6 • Data Center Active
+                System v6.7 • Data Center Active
             </div>
         </div>
     );

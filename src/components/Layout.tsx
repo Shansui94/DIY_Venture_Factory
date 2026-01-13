@@ -18,7 +18,8 @@ import {
     FileCheck,
     Database,
     FileText,
-    FlaskConical // Added for Recipes
+    FlaskConical,
+    Sparkles // Added for AI Hub
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -113,10 +114,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                 V
                             </div>
                             <div>
-                                <h1 className="font-black text-2xl tracking-tighter text-white leading-none">DIY VENTURE</h1>
+                                <h1 className="font-black text-2xl tracking-tighter text-white leading-none">Packsecure</h1>
                                 <div className="flex items-center gap-1.5 mt-1">
                                     <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span>
-                                    <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">System Online</p>
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">System v6.7 • Data Center Active</p>
                                 </div>
                             </div>
                         </div>
@@ -130,6 +131,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                 <NavGroup title="Executive Suite">
                                     <NavItem id="dashboard" icon={LayoutDashboard} label="Dashboard" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="data-v2" icon={Database} label="Data Command" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="customer-import" icon={Users} label="Import Customers" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="universal-intake" icon={Sparkles} label="AI Data Hub" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="factory-dashboard" icon={LayoutDashboard} label="Factory OS (Live)" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 </NavGroup>
 
                                 <NavGroup title="Operations">
@@ -147,6 +151,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                 <NavGroup title="Logistics">
                                     <NavItem id="delivery" icon={Truck} label="Delivery Orders" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="dispatch" icon={Truck} label="Dispatch" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="loading-dock" icon={ClipboardList} label="Loading Dock" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="production" icon={Database} label="Production Logs" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="report-history" icon={FileText} label="Reports" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 </NavGroup>

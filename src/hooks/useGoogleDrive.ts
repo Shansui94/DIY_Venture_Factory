@@ -5,7 +5,8 @@ import { useState, useEffect } from 'react';
 const CLIENT_ID = '874011854758-vmjga0phkbprlb7kla024t6uc1q6r869.apps.googleusercontent.com';
 const API_KEY = 'AIzaSyBdVkRhIvDxiMJU6r47hg3Plfmhi5hUz6A';
 const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
-const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+const SHEETS_DISCOVERY = 'https://sheets.googleapis.com/$discovery/rest?version=v4';
+const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets';
 
 declare global {
     interface Window {
@@ -35,7 +36,7 @@ export function useGoogleDrive() {
                     try {
                         await window.gapi.client.init({
                             apiKey: API_KEY,
-                            discoveryDocs: [DISCOVERY_DOC],
+                            discoveryDocs: [DISCOVERY_DOC, SHEETS_DISCOVERY],
                         });
                         setIsGapiLoaded(true);
                     } catch (e: any) {
@@ -134,10 +135,55 @@ export function useGoogleDrive() {
             fileId: fileId,
             alt: 'media',
         });
-        return res.body;
+    };
+
+    // 4. Sheets Operations
+    const appendToSheet = async (spreadsheetId: string, range: string, values: any[][]) => {
+        if (!window.gapi?.client?.sheets) throw new Error("Sheets API not loaded");
+
+        const params = {
+            spreadsheetId: spreadsheetId,
+            range: range,
+            valueInputOption: 'USER_ENTERED',
+            insertDataOption: 'INSERT_ROWS',
+        };
+
+        const valueRangeBody = {
+            majorDimension: 'ROWS',
+            values: values,
+        };
+
+        return window.gapi.client.sheets.spreadsheets.values.append(params, valueRangeBody);
+    };
+
+    const readSheetValues = async (spreadsheetId: string, range: string) => {
+        if (!window.gapi?.client?.sheets) throw new Error("Sheets API not loaded");
+        const res = await window.gapi.client.sheets.spreadsheets.values.get({
+            spreadsheetId,
+            range,
+        });
+        return res.result.values;
+    };
+
+    const updateSheetValues = async (spreadsheetId: string, range: string, values: any[][]) => {
+        if (!window.gapi?.client?.sheets) throw new Error("Sheets API not loaded");
+
+        const params = {
+            spreadsheetId: spreadsheetId,
+            range: range,
+            valueInputOption: 'USER_ENTERED',
+        };
+
+        const valueRangeBody = {
+            majorDimension: 'ROWS',
+            values: values,
+        };
+
+        return window.gapi.client.sheets.spreadsheets.values.update(params, valueRangeBody);
     };
 
     return {
+        content: null,
         isReady: isGapiLoaded && isGisLoaded,
         isAuthenticated: !!accessToken,
         connectToDrive,
@@ -145,6 +191,9 @@ export function useGoogleDrive() {
         uploadFile,
         listFiles,
         downloadFile,
+        appendToSheet,
+        readSheetValues,
+        updateSheetValues,
         error,
         debugStatus
     };

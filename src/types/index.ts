@@ -94,6 +94,32 @@ export interface SalesOrder {
     totalAmount?: number; // Optional for now
     driverId?: string; // NEW: Assigned Driver ID
     driverName?: string; // NEW: Resolved Driver Name for display
+
+    // Logistics V2
+    trip_id?: string;
+    stop_sequence?: number;
+    pod_signature_url?: string;
+    pod_photo_url?: string;
+    pod_signed_by?: string;
+    pod_timestamp?: string;
+}
+
+export interface LogisticsTrip {
+    trip_id: string;
+    trip_number: string;
+    driver_id?: string;
+    vehicle_id?: string;
+    status: 'Planning' | 'Loading' | 'Ready' | 'En-Route' | 'Completed';
+    total_distance_km?: number;
+    total_weight_kg?: number;
+    created_at: string;
+    started_at?: string;
+    completed_at?: string;
+
+    // Virtual Fields (Joined)
+    driver?: User;
+    vehicle?: any;
+    orders?: SalesOrder[];
 }
 
 // ... existing InventoryItem ...

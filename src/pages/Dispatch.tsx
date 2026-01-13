@@ -1,25 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
-import { Truck, MapPin, Package, User, Navigation, Calendar, Filter, Users, Factory, Gauge, Phone } from 'lucide-react';
+import {
+    Truck, MapPin, Package, User, Navigation, Calendar, Filter, Users,
+    Factory, Gauge, Phone, Plus, List, CheckSquare, Square, ChevronRight,
+    Sparkles, LayoutDashboard
+} from 'lucide-react';
+import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
+import { generateDraftTrips, DraftTrip } from '../utils/autoRouting';
 import { calculateLoad, findNearestFactory, determineZone } from '../utils/logistics';
+import { LogisticsTrip, SalesOrder, User as AppUser } from '../types';
 
-// Types
-interface DispatchOrder {
-    id: string;
-    orderNumber: string;
-    customer: string;
-    customer_id?: string;
-    items: any[];
-    status: string;
-    deliveryAddress: string;
-    deliveryZone: string;
-    driverId?: string;
-    deadline?: string;
-    nearestFactory?: any;
-    distance?: number;
+// Extended Types for Local State
+interface DispatchOrder extends SalesOrder {
     loadStats?: any;
+    nearestFactory?: any;
     lat?: number;
     lng?: number;
+    distance?: number;
+    deliveryAddress: string;
+    deliveryZone: string;
 }
 
 interface Vehicle {
@@ -29,7 +28,6 @@ interface Vehicle {
     max_volume_m3: number;
     max_weight_kg: number;
     driver_id?: string;
-    current_load?: any;
 }
 
 interface Driver {
@@ -41,83 +39,83 @@ interface Driver {
 }
 
 const Dispatch: React.FC = () => {
+    // Data State
     const [orders, setOrders] = useState<DispatchOrder[]>([]);
+    const [trips, setTrips] = useState<LogisticsTrip[]>([]);
     const [drivers, setDrivers] = useState<Driver[]>([]);
     const [vehicles, setVehicles] = useState<Vehicle[]>([]);
     const [loading, setLoading] = useState(true);
-    const [selectedZone, setSelectedZone] = useState<string>('All');
 
-    // Assignment Modal State
-    const [selectedOrder, setSelectedOrder] = useState<DispatchOrder | null>(null);
-    const [selectedVehicle, setSelectedVehicle] = useState<string>('');
+    // UI State
+    const [selectedZone, setSelectedZone] = useState<string>('All');
+    const [viewMode, setViewMode] = useState<'orders' | 'trips'>('orders');
+
+    // -- PHASE 3: AI PLANNING STATE --
+    const [draftTrips, setDraftTrips] = useState<DraftTrip[]>([]);
+    const [unassignedOrders, setUnassignedOrders] = useState<DispatchOrder[]>([]); // Derived state for board
+
+    // Initialize unassigned when orders load
+    useEffect(() => {
+        setUnassignedOrders(orders.filter(o => !o.trip_id));
+    }, [orders]);
+
+
+    // Selection State
+    const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
+
+    // Modal State
+    const [isTripModalOpen, setIsTripModalOpen] = useState(false);
+    const [tripDriverId, setTripDriverId] = useState('');
+    const [tripVehicleId, setTripVehicleId] = useState('');
+    const [confirmingDraftId, setConfirmingDraftId] = useState<string | null>(null); // New for converting draft
 
     const fetchData = async () => {
         setLoading(true);
         try {
-            // 1. Fetch Sales Orders (Pending/In-Transit)
-            const { data: salesData } = await supabase
-                .from('sales_orders')
-                .select('*, sys_customers(lat, lng)') // Join with customers for coords
-                .neq('status', 'Completed')
-                .neq('status', 'Delivered')
-                .order('created_at', { ascending: false });
+            const [salesRes, tripRes, userRes, vehicleRes, customerRes] = await Promise.all([
+                supabase.from('sales_orders').select('*').neq('status', 'Completed').neq('status', 'Delivered').neq('status', 'Archived').order('created_at', { ascending: false }),
+                supabase.from('logistics_trips').select('*').order('created_at', { ascending: false }),
+                supabase.from('users_public').select('*').eq('role', 'Driver'),
+                supabase.from('sys_vehicles').select('*').order('id'),
+                supabase.from('sys_customers').select('name, lat, lng')
+            ]);
 
-            // 2. Fetch Drivers
-            const { data: userData } = await supabase
-                .from('users_public')
-                .select('*')
-                .eq('role', 'Driver');
+            const salesData = salesRes.data;
+            const tripData = tripRes.data;
+            const userData = userRes.data;
+            const vehicleData = vehicleRes.data;
+            const customerData = customerRes.data || [];
 
-            // 3. Fetch Vehicles
-            const { data: vehicleData } = await supabase
-                .from('sys_vehicles')
-                .select('*')
-                .order('id');
-
+            // Process Orders
             const mappedOrders: DispatchOrder[] = (salesData || []).map(o => {
-                // Determine Logic
-                const lat = o.sys_customers?.lat;
-                const lng = o.sys_customers?.lng;
-
-                // Nearest Factory
+                const matchedCustomer = customerData.find(c => c.name.toLowerCase() === (o.customer || '').toLowerCase());
+                const lat = matchedCustomer?.lat || null;
+                const lng = matchedCustomer?.lng || null;
                 let nearest = null;
-                if (lat && lng) {
-                    nearest = findNearestFactory(lat, lng);
-                }
-
-                // Load Calc (Generic without vehicle first)
+                if (lat && lng) nearest = findNearestFactory(lat, lng);
                 const load = calculateLoad(o.items || [], null);
 
                 return {
-                    id: o.id,
+                    ...o,
                     orderNumber: o.order_number || o.id.substring(0, 8),
-                    customer: o.customer,
-                    customer_id: o.customer_id,
-                    items: o.items || [],
-                    status: o.status,
                     deliveryAddress: o.delivery_address || 'Unspecified Location',
                     deliveryZone: o.delivery_zone || determineZone(o.delivery_address || ''),
-                    driverId: o.driver_id,
-                    deadline: o.deadline,
                     nearestFactory: nearest,
                     loadStats: load,
                     lat, lng
                 };
             });
 
-            // Map Drivers & Vehicles
             const mappedDrivers: Driver[] = (userData || []).map(u => ({
                 uid: u.id,
                 name: u.name || u.email?.split('@')[0] || 'Unknown',
                 email: u.email,
-                status: mappedOrders.some(o => o.driverId === u.id) ? 'On-Route' : 'Available',
-                activeOrders: mappedOrders.filter(o => o.driverId === u.id).length
+                status: 'Available',
+                activeOrders: 0
             }));
 
-            // Calculate Vehicle Loads (if orders are assigned to vehicles - for now assume driver assignment proxies vehicle)
-            // Ideally we need logistics_delivery_orders table. 
-            // For MVP, we just list vehicles.
             setOrders(mappedOrders);
+            setTrips(tripData || []);
             setDrivers(mappedDrivers);
             setVehicles(vehicleData || []);
 
@@ -130,248 +128,353 @@ const Dispatch: React.FC = () => {
 
     useEffect(() => {
         fetchData();
-        // Substribe to changes
-        const channel = supabase.channel('dispatch_updates')
+        const sub = supabase.channel('dispatch_updates')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'sales_orders' }, fetchData)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'logistics_trips' }, fetchData)
             .subscribe();
-        return () => { supabase.removeChannel(channel) };
+        return () => { supabase.removeChannel(sub) };
     }, []);
 
-    const handleAssign = async (orderId: string, vehicleId: string, driverId: string) => {
-        if (!vehicleId && !driverId) return;
+    // -- HANDLERS --
 
-        // In real app: Create a Delivery Order (DO) entry
-        // Here: Just update sales_order for simplicity of demo
-        try {
-            const { error } = await supabase
-                .from('sales_orders')
-                .update({
-                    driver_id: driverId, // Assign Driver
-                    status: 'Shipped'
-                })
-                .eq('id', orderId);
+    const handleAutoPlan = () => {
+        const drafts = generateDraftTrips(unassignedOrders);
+        setDraftTrips(drafts);
+        const assignedIds = new Set(drafts.flatMap(d => d.orders.map(o => o.id)));
+        setUnassignedOrders(prev => prev.filter(o => !assignedIds.has(o.id)));
+    };
 
-            if (error) throw error;
-            fetchData();
-            setSelectedOrder(null);
-            alert(`Assigned to ${driverId ? 'Driver' : 'Vehicle'} successfully!`);
-        } catch (error: any) {
-            alert("Assignment Failed: " + error.message);
+    const handleDragEnd = (result: DropResult) => {
+        const { source, destination } = result;
+        if (!destination) return;
+
+        const sourceId = source.droppableId;
+        const destId = destination.droppableId;
+        if (sourceId === destId && source.index === destination.index) return;
+
+        const getList = (id: string) => {
+            if (id === 'unassigned') return unassignedOrders;
+            const draft = draftTrips.find(d => d.id === id);
+            return draft ? draft.orders : [];
+        };
+
+        const sourceList = [...getList(sourceId)];
+        const destList = sourceId === destId ? sourceList : [...getList(destId)];
+
+        const [movedItem] = sourceList.splice(source.index, 1);
+        destList.splice(destination.index, 0, movedItem);
+
+        if (sourceId === 'unassigned') {
+            setUnassignedOrders(sourceList);
+        } else {
+            setDraftTrips(prev => prev.map(d => d.id === sourceId ? { ...d, orders: sourceList, ...recalcStats(sourceList) } : d));
+        }
+
+        if (sourceId !== destId) {
+            if (destId === 'unassigned') {
+                setUnassignedOrders(destList);
+            } else {
+                setDraftTrips(prev => prev.map(d => d.id === destId ? { ...d, orders: destList, ...recalcStats(destList) } : d));
+            }
         }
     };
 
-    // Filter Logic
-    const filteredOrders = orders.filter(o =>
-        selectedZone === 'All' || o.deliveryZone === selectedZone
-    );
-
-    const unassignedOrders = filteredOrders.filter(o => !o.driverId);
-
-    // Stats
-    const stats = {
-        pending: orders.filter(o => !o.driverId).length,
-        inTransit: orders.filter(o => o.driverId).length,
-        capacity: '78%' // Dummy aggregated
+    const recalcStats = (orders: any[]) => {
+        const vol = orders.reduce((acc, o) => acc + (parseFloat(o.loadStats?.totalVol || 0)), 0);
+        const wgt = orders.reduce((acc, o) => acc + (parseFloat(o.loadStats?.totalWeight || 0)), 0);
+        return { totalVol: vol, totalWeight: wgt, isOverloaded: vol > 20 };
     };
 
-    // Load Simulation for Selected Order + Selected Vehicle
-    const getSimulation = (order: DispatchOrder, vehicleId: string) => {
+
+    const handleConfirmDraft = (draft: DraftTrip) => {
+        // Instead of auto-confirming with random driver, open the modal
+        const ids = new Set(draft.orders.map(o => o.id));
+        setSelectedOrderIds(ids);
+        setIsTripModalOpen(true);
+        // We can optionally set a draft ID to remove it later, but for now logic is fine
+        setConfirmingDraftId(draft.id);
+    };
+
+    const handleCreateTrip = async () => {
+        if (!tripDriverId || !tripVehicleId) return alert("Select driver and vehicle");
+        try {
+            const { data: trip, error: tripError } = await supabase
+                .from('logistics_trips')
+                .insert({
+                    trip_number: `T-${new Date().getFullYear()}-${Math.floor(Math.random() * 10000)}`,
+                    driver_id: tripDriverId,
+                    vehicle_id: tripVehicleId,
+                    status: 'Planning'
+                }).select().single();
+            if (tripError) throw tripError;
+
+            const updates = Array.from(selectedOrderIds).map((orderId, index) => ({
+                id: orderId, trip_id: trip.trip_id, stop_sequence: index + 1, status: 'Planned'
+            }));
+
+            for (const update of updates) {
+                await supabase.from('sales_orders').update({
+                    trip_id: update.trip_id, stop_sequence: update.stop_sequence, status: 'Planned'
+                }).eq('id', update.id);
+            }
+
+            // If we were confirming a draft, remove it from the board
+            if (confirmingDraftId) {
+                setDraftTrips(prev => prev.filter(d => d.id !== confirmingDraftId));
+                setConfirmingDraftId(null);
+            }
+
+            setIsTripModalOpen(false);
+            setSelectedOrderIds(new Set());
+            setTripDriverId('');
+            setTripVehicleId('');
+            setViewMode('trips');
+            fetchData();
+        } catch (error: any) {
+            alert("Failed: " + error.message);
+        }
+    };
+
+
+    const getSimulation = (ordersToSim: DispatchOrder[], vehicleId: string) => {
         const vehicle = vehicles.find(v => v.id === vehicleId);
         if (!vehicle) return null;
-        return calculateLoad(order.items, vehicle);
+        const allItems = ordersToSim.flatMap(o => o.items);
+        return calculateLoad(allItems, vehicle);
     };
 
+    const selectedOrdersList = orders.filter(o => selectedOrderIds.has(o.id));
+
     return (
-        <div className="p-6 h-full text-white animate-fade-in flex flex-col gap-6 pb-20">
+        <div className="min-h-screen bg-slate-950 text-slate-100 p-6 font-sans selection:bg-indigo-500/30">
             {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-center bg-[#1e1e24] p-6 rounded-2xl border border-white/5 shadow-2xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/10 rounded-full blur-[80px] -z-10"></div>
-                <div className="z-10">
-                    <h1 className="text-3xl font-black tracking-tight text-white flex items-center gap-3 mb-2">
-                        <Truck className="text-indigo-500" size={32} />
-                        SMART DISPATCH
+            <div className="flex flex-col md:flex-row justify-between items-center bg-slate-900/50 backdrop-blur-md p-6 rounded-2xl border border-slate-800 shadow-xl mb-6">
+                <div>
+                    <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400 flex items-center gap-3">
+                        <Truck className="text-indigo-400" size={32} />
+                        Smart Dispatch <span className="text-sm font-bold text-slate-500 bg-slate-800 px-2 py-0.5 rounded border border-slate-700">AI Enabled</span>
                     </h1>
-                    <p className="text-gray-400 font-medium">AI Routing & Load Optimization</p>
+                    <p className="text-slate-400 font-medium mt-1">Drag-and-drop planning powered by Logistics AI.</p>
                 </div>
-                {/* HUD Stats */}
-                <div className="flex gap-4 mt-4 md:mt-0 z-10 w-full md:w-auto overflow-x-auto">
-                    <div className="px-6 py-3 bg-[#121215] rounded-xl border border-white/5 flex flex-col items-center">
-                        <span className="text-2xl font-black text-white">{stats.pending}</span>
-                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Queue</span>
-                    </div>
-                    <div className="px-6 py-3 bg-[#121215] rounded-xl border border-white/5 flex flex-col items-center">
-                        <span className="text-2xl font-black text-green-400">{stats.capacity}</span>
-                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Fleet Cap.</span>
-                    </div>
-                </div>
-            </div>
-
-            {/* Zone Filter */}
-            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
-                {['All', 'North', 'Central', 'South', 'East'].map(zone => (
+                <div className="flex gap-2 mt-4 md:mt-0 bg-slate-800/50 p-1 rounded-xl border border-slate-700">
                     <button
-                        key={zone}
-                        onClick={() => setSelectedZone(zone)}
-                        className={`px-6 py-2.5 rounded-xl text-sm font-bold uppercase tracking-wider border transition-all whitespace-nowrap ${selectedZone === zone
-                            ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg'
-                            : 'bg-[#1e1e24] border-white/5 text-gray-400 hover:text-white hover:bg-white/5'
-                            }`}
+                        onClick={() => setViewMode('orders')}
+                        className={`px-4 py-2 rounded-lg font-bold transition-all text-sm flex items-center gap-2 ${viewMode === 'orders' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
                     >
-                        {zone}
+                        <LayoutDashboard size={14} /> Planning Board
                     </button>
-                ))}
+                    <button
+                        onClick={() => setViewMode('trips')}
+                        className={`px-4 py-2 rounded-lg font-bold transition-all text-sm flex items-center gap-2 ${viewMode === 'trips' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                    >
+                        <Truck size={14} /> Active Trips ({trips.length})
+                    </button>
+                </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* LEFT: ORDER QUEUE */}
-                <div className="lg:col-span-2 space-y-4">
-                    <h2 className="text-gray-400 font-bold uppercase tracking-widest text-xs mb-2">Unassigned Orders ({unassignedOrders.length})</h2>
-
-                    {unassignedOrders.map(order => (
-                        <div key={order.id} className="bg-[#1e1e24] p-4 rounded-xl border border-white/5 hover:border-indigo-500/50 transition-all group relative">
-                            {/* Best Factory Tag */}
-                            {order.nearestFactory && (
-                                <div className="absolute top-4 right-4 flex items-center gap-2">
-                                    <span className="bg-green-500/10 text-green-400 text-[10px] font-bold px-2 py-1 rounded border border-green-500/20 flex items-center gap-1">
-                                        <Factory size={10} />
-                                        Fulfil via {order.nearestFactory.factory.id} ({order.nearestFactory.distance.toFixed(1)}km)
-                                    </span>
-                                </div>
-                            )}
-
-                            <div className="flex justify-between items-start mb-3">
-                                <div>
-                                    <div className="text-indigo-400 font-black text-sm mb-1">{order.orderNumber}</div>
-                                    <h3 className="text-lg font-bold text-white">{order.customer}</h3>
-                                    <div className="text-gray-500 text-xs mt-1 flex items-center gap-1"><MapPin size={12} /> {order.deliveryAddress}</div>
-                                </div>
+            {/* Main Content */}
+            {viewMode === 'orders' && (
+                <DragDropContext onDragEnd={handleDragEnd}>
+                    <div className="flex gap-6 overflow-x-auto pb-4 h-[calc(100vh-220px)]">
+                        {/* LEFT: Unassigned Pool */}
+                        <div className="w-[380px] flex flex-col shrink-0 bg-slate-900/30 border border-slate-800 rounded-2xl overflow-hidden">
+                            <div className="p-4 bg-slate-900/80 backdrop-blur border-b border-slate-800 sticky top-0 z-10 flex justify-between items-center">
+                                <span className="text-slate-400 font-bold text-sm uppercase flex items-center gap-2">
+                                    <List size={16} /> Unassigned ({unassignedOrders.length})
+                                </span>
+                                <button
+                                    onClick={handleAutoPlan}
+                                    className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 shadow-lg shadow-indigo-900/20 active:scale-95 transition-all group"
+                                >
+                                    <Sparkles size={14} className="group-hover:rotate-12 transition-transform" /> Auto-Plan
+                                </button>
                             </div>
 
-                            {/* Load Visual */}
-                            <div className="bg-[#121215] p-3 rounded-lg border border-white/5 mb-3 flex items-center justify-between">
-                                <div className="flex items-center gap-4 text-xs font-mono text-gray-400">
-                                    <span>Vol: <span className="text-white">{order.loadStats.totalVol}m³</span></span>
-                                    <span>Wgt: <span className="text-white">{order.loadStats.totalWeight}kg</span></span>
-                                </div>
-                                <div className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Est. Load</div>
-                            </div>
-
-                            <button
-                                onClick={() => setSelectedOrder(order)}
-                                className="w-full bg-indigo-600/10 hover:bg-indigo-600 text-indigo-400 hover:text-white border border-indigo-600/30 py-2 rounded-lg text-sm font-bold transition-all uppercase tracking-wide"
-                            >
-                                Assign Vehicle & Driver
-                            </button>
-                        </div>
-                    ))}
-
-                    {unassignedOrders.length === 0 && (
-                        <div className="text-center py-20 text-gray-600 bg-white/5 rounded-xl border border-dashed border-white/5">
-                            No pending orders. Good job!
-                        </div>
-                    )}
-                </div>
-
-                {/* RIGHT: FLEET STATUS (or ASSIGNMENT PANEL) */}
-                <div className="space-y-6">
-                    {selectedOrder ? (
-                        <div className="bg-[#1e1e24] p-6 rounded-2xl border border-indigo-500/50 shadow-2xl relative animate-in slide-in-from-right-10">
-                            <div className="absolute top-0 right-0 p-4">
-                                <button onClick={() => setSelectedOrder(null)}><Users size={16} className="text-gray-500 hover:text-white" /></button>
-                            </div>
-
-                            <h2 className="text-xl font-bold text-white mb-1">Assign Deliver</h2>
-                            <p className="text-indigo-400 text-sm font-bold mb-6">{selectedOrder.orderNumber}</p>
-
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">1. Select Vehicle (Capacity Check)</label>
-                                    <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto custom-scrollbar">
-                                        {vehicles.map(v => {
-                                            const sim = getSimulation(selectedOrder, v.id);
-                                            const isOver = sim?.isOverloaded;
-                                            return (
-                                                <button
-                                                    key={v.id}
-                                                    onClick={() => setSelectedVehicle(v.id)}
-                                                    className={`p-3 rounded-lg border text-left transition-all ${selectedVehicle === v.id ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-[#121215] border-white/10 text-gray-400'
-                                                        }`}
-                                                >
-                                                    <div className="flex justify-between items-center mb-1">
-                                                        <span className="font-bold text-sm">{v.plate_number}</span>
-                                                        <span className="text-[10px]">{v.max_volume_m3}m³</span>
-                                                    </div>
-                                                    {sim && selectedVehicle === v.id && (
-                                                        <div className="space-y-1">
-                                                            <div className="w-full h-1.5 bg-black/50 rounded-full overflow-hidden">
-                                                                <div className={`h-full ${isOver ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${sim.percentVol}%` }}></div>
+                            <Droppable droppableId="unassigned">
+                                {(provided) => (
+                                    <div
+                                        {...provided.droppableProps}
+                                        ref={provided.innerRef}
+                                        className="flex-1 p-3 space-y-3 overflow-y-auto custom-scrollbar bg-slate-950/30"
+                                    >
+                                        {unassignedOrders.map((order, index) => (
+                                            <Draggable key={order.id} draggableId={order.id} index={index}>
+                                                {(provided, snapshot) => (
+                                                    <div
+                                                        ref={provided.innerRef}
+                                                        {...provided.draggableProps}
+                                                        {...provided.dragHandleProps}
+                                                        className={`p-4 rounded-xl border transition-all shadow-sm group ${snapshot.isDragging
+                                                            ? 'bg-indigo-900/80 border-indigo-500 z-50 scale-105 shadow-2xl'
+                                                            : 'bg-slate-800/40 border-slate-700/50 hover:border-indigo-500/30 hover:bg-slate-800/60'
+                                                            }`}
+                                                    >
+                                                        <div className="flex justify-between items-start mb-2">
+                                                            <div className="font-mono text-xs text-indigo-400 font-bold bg-indigo-500/10 px-2 py-0.5 rounded">{order.orderNumber}</div>
+                                                            <div className="text-[10px] font-bold bg-slate-950/50 px-2 py-0.5 rounded text-slate-400 border border-slate-700">{order.deliveryZone}</div>
+                                                        </div>
+                                                        <div className="font-bold text-slate-200 text-sm mb-1">{order.customer}</div>
+                                                        <div className="flex justify-between items-end mt-2">
+                                                            <div className="text-[10px] text-slate-500 truncate max-w-[180px] flex items-center gap-1">
+                                                                <MapPin size={10} /> {order.deliveryAddress}
                                                             </div>
-                                                            <div className="flex justify-between text-[10px]">
-                                                                <span>{sim.percentVol}% Full</span>
-                                                                <span className={isOver ? 'text-red-300' : 'text-green-300'}>
-                                                                    {isOver ? 'OVERLOAD' : `${sim.spaceRemaining}m³ Left`}
+                                                            <div className="flex gap-2 text-[10px] font-mono text-slate-400 bg-slate-950/30 px-2 py-1 rounded">
+                                                                <span className={parseFloat(order.loadStats.totalVol) > 5 ? 'text-amber-400 font-bold' : ''}>
+                                                                    {order.loadStats.totalVol}m³
                                                                 </span>
                                                             </div>
                                                         </div>
-                                                    )}
-                                                </button>
-                                            )
-                                        })}
-                                    </div>
-                                </div>
-
-                                {selectedVehicle && (
-                                    <div className="bg-yellow-500/10 p-3 rounded-lg border border-yellow-500/20">
-                                        <div className="flex items-center gap-2 text-yellow-500 font-bold text-xs mb-1">
-                                            <Phone size={14} />
-                                            <span>Opportunity: Fill the Truck!</span>
-                                        </div>
-                                        <p className="text-[11px] text-gray-400">
-                                            This truck has <strong>{getSimulation(selectedOrder, selectedVehicle)?.spaceRemaining}m³</strong> remaining.
-                                            Contact nearby customers in <strong>{selectedOrder.deliveryZone}</strong> to add more items?
-                                        </p>
+                                                    </div>
+                                                )}
+                                            </Draggable>
+                                        ))}
+                                        {provided.placeholder}
                                     </div>
                                 )}
+                            </Droppable>
+                        </div>
 
-                                <div>
-                                    <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">2. Assign Driver</label>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        {drivers.map(d => (
-                                            <button
-                                                key={d.uid}
-                                                onClick={() => handleAssign(selectedOrder.id, selectedVehicle, d.uid)}
-                                                className="p-2 bg-[#121215] border border-white/10 rounded hover:border-white/30 text-xs text-left"
+                        {/* RIGHT: Drafting Board */}
+                        {draftTrips.length === 0 ? (
+                            <div className="flex-1 flex flex-col items-center justify-center text-slate-600 border-2 border-dashed border-slate-800 rounded-2xl bg-slate-900/10">
+                                <div className="bg-slate-900 p-6 rounded-full border border-slate-800 mb-4 shadow-xl">
+                                    <Sparkles size={48} className="text-indigo-500" />
+                                </div>
+                                <h3 className="text-xl font-bold text-slate-300">Ready to Plan</h3>
+                                <p className="text-sm max-w-sm text-center mt-2 text-slate-500">
+                                    Drag orders from the left to create a trip, or click <strong className="text-indigo-400">Auto-Plan</strong> to let AI optimize routes for you.
+                                </p>
+                            </div>
+                        ) : (
+                            draftTrips.map((draft) => (
+                                <div key={draft.id} className="w-[340px] flex flex-col shrink-0 bg-slate-900/50 backdrop-blur border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+                                    {/* Trip Header */}
+                                    <div className={`p-4 border-b border-slate-700/50 flex flex-col gap-3 ${draft.isOverloaded ? 'bg-red-500/10' : 'bg-indigo-500/10'}`}>
+                                        <div className="flex justify-between items-center">
+                                            <div className="flex items-center gap-2">
+                                                <Truck size={16} className={draft.isOverloaded ? 'text-red-400' : 'text-indigo-400'} />
+                                                <h4 className="font-bold text-slate-100 text-sm">{draft.name}</h4>
+                                            </div>
+                                            <span className="text-[10px] bg-slate-950/50 px-2 py-0.5 rounded text-slate-400 font-mono border border-slate-700/50">{draft.zone}</span>
+                                        </div>
+
+                                        {/* Capacity Bar */}
+                                        <div>
+                                            <div className="flex justify-between text-[10px] font-mono font-bold mb-1">
+                                                <span className={draft.isOverloaded ? 'text-red-400' : 'text-slate-400'}>
+                                                    {draft.totalVol.toFixed(1)} / 20.0 m³
+                                                </span>
+                                                <span className={draft.isOverloaded ? 'text-red-400' : 'text-emerald-400'}>
+                                                    {draft.isOverloaded ? 'OVERLOADED' : 'OPTIMAL'}
+                                                </span>
+                                            </div>
+                                            <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800/50">
+                                                <div
+                                                    className={`h-full transition-all duration-500 ${draft.isOverloaded ? 'bg-red-500' : 'bg-emerald-500'}`}
+                                                    style={{ width: `${Math.min((draft.totalVol / 20) * 100, 100)}%` }}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <button
+                                            onClick={() => handleConfirmDraft(draft)}
+                                            disabled={confirmingDraftId === draft.id}
+                                            className="w-full bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 py-1.5 rounded-lg text-xs font-bold uppercase transition-all flex justify-center items-center gap-2"
+                                        >
+                                            {confirmingDraftId === draft.id ? <span className="animate-spin">⏳</span> : <CheckSquare size={14} />}
+                                            Confirm Trip
+                                        </button>
+                                    </div>
+
+                                    {/* Trip Orders */}
+                                    <Droppable droppableId={draft.id}>
+                                        {(provided) => (
+                                            <div
+                                                {...provided.droppableProps}
+                                                ref={provided.innerRef}
+                                                className={`flex-1 p-2 space-y-2 overflow-y-auto custom-scrollbar bg-slate-950/30 ${draft.isOverloaded ? 'bg-red-900/5' : ''}`}
                                             >
-                                                <div className="font-bold text-white">{d.name}</div>
-                                                <div className={`text-[10px] ${d.status === 'Available' ? 'text-green-500' : 'text-amber-500'}`}>{d.status}</div>
-                                            </button>
-                                        ))}
+                                                {draft.orders.map((order: any, index: number) => (
+                                                    <Draggable key={order.id} draggableId={order.id} index={index}>
+                                                        {(provided, snapshot) => (
+                                                            <div
+                                                                ref={provided.innerRef}
+                                                                {...provided.draggableProps}
+                                                                {...provided.dragHandleProps}
+                                                                className={`p-3 rounded-lg border transition-all ${snapshot.isDragging
+                                                                    ? 'bg-slate-800 border-indigo-500 shadow-xl z-50'
+                                                                    : 'bg-slate-900 border-slate-800'
+                                                                    }`}
+                                                            >
+                                                                <div className="flex justify-between mb-1">
+                                                                    <span className="text-slate-200 font-bold text-xs truncate max-w-[150px]">{order.customer}</span>
+                                                                    <span className="text-slate-500 text-[10px] bg-slate-950 px-1 rounded">{order.loadStats.totalVol}m³</span>
+                                                                </div>
+                                                                <div className="text-[10px] text-slate-600 truncate">{order.deliveryAddress}</div>
+                                                            </div>
+                                                        )}
+                                                    </Draggable>
+                                                ))}
+                                                {provided.placeholder}
+                                            </div>
+                                        )}
+                                    </Droppable>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </DragDropContext>
+            )}
+
+            {/* View Mode: TRIPS */}
+            {viewMode === 'trips' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                    {trips.length === 0 ? (
+                        <div className="col-span-full p-20 text-center text-slate-600 bg-slate-900/20 rounded-2xl border border-dashed border-slate-800">
+                            <Truck size={48} className="mx-auto mb-4 opacity-50" />
+                            <h3 className="text-xl font-bold mb-2">No Active Trips</h3>
+                        </div>
+                    ) : (
+                        trips.map(trip => (
+                            <div key={trip.trip_id} className="bg-slate-900/50 backdrop-blur border border-slate-800 p-6 rounded-2xl shadow-lg hover:border-indigo-500/30 transition-all group">
+                                <div className="flex justify-between items-start mb-6">
+                                    <div>
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700 text-indigo-400">
+                                                <Truck size={20} />
+                                            </div>
+                                            <div>
+                                                <h3 className="font-bold text-slate-100 text-lg">{trip.trip_number}</h3>
+                                                <span className={`text-[10px] px-2 py-0.5 rounded border uppercase font-bold ${trip.status === 'Planning' ? 'text-amber-400 border-amber-500/20 bg-amber-500/10' :
+                                                    trip.status === 'Completed' ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' :
+                                                        'text-blue-400 border-blue-500/20 bg-blue-500/10'
+                                                    }`}>
+                                                    {trip.status}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="text-3xl font-black text-slate-200">{orders.filter(o => o.trip_id === trip.trip_id).length}</div>
+                                        <div className="text-[10px] font-bold text-slate-600 uppercase">Stops</div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1 mb-4">
+                                    <div className="flex items-center justify-between text-sm p-2 bg-slate-950/50 rounded-lg border border-slate-800/50">
+                                        <span className="text-slate-500 flex items-center gap-2"><User size={14} /> Driver</span>
+                                        <span className="text-slate-300 font-bold">{drivers.find(d => d.uid === trip.driver_id)?.name || 'Unknown'}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-sm p-2 bg-slate-950/50 rounded-lg border border-slate-800/50">
+                                        <span className="text-slate-500 flex items-center gap-2"><Truck size={14} /> Vehicle</span>
+                                        <span className="text-slate-300 font-bold">{vehicles.find(v => v.id === trip.vehicle_id)?.plate_number || 'Unknown'}</span>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    ) : (
-                        // Standard Fleet List
-                        <div className="bg-[#1e1e24] p-5 rounded-2xl border border-white/5">
-                            <div className="flex items-center gap-2 mb-4">
-                                <Users size={18} className="text-gray-400" />
-                                <h2 className="text-lg font-bold text-white">Active Fleet</h2>
-                            </div>
-                            <div className="space-y-3">
-                                {drivers.map(driver => (
-                                    <div key={driver.uid} className="flex items-center justify-between p-3 bg-black/20 rounded-lg">
-                                        <div className="flex items-center gap-3">
-                                            <div className={`w-2 h-2 rounded-full ${driver.status === 'On-Route' ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`} />
-                                            <span className="text-sm font-bold text-gray-300">{driver.name}</span>
-                                        </div>
-                                        <span className="text-xs text-gray-500">{driver.activeOrders} Jobs</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
+                        ))
                     )}
                 </div>
-            </div>
+            )}
         </div>
     );
 };

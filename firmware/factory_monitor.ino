@@ -4,26 +4,28 @@
 #include <WiFiClientSecure.h> // Supports HTTPS for Vercel
 
 // --- WIFI CONFIGURATION (Change This) ---
-const char *ssid = "NAMA_WIFI_ANDA";
-const char *password = "PASSWORD_WIFI_ANDA";
+const char *ssid = "opm9821_2.4Ghz@MaxisFibre";
+const char *password = "88888888";
 
-// --- SERVER CONFIGURATION (Choose ONE) ---
-
-// OPTION A: Local PC (Keep PC on)
-// const char *serverUrl = "http://192.168.1.228:8080/api/alarm";
-
-// OPTION B: Cloud Vercel (PC can be off)
-const char *serverUrl = "https://packsecure.vercel.app/api/alarm";
+// --- SERVER CONFIGURATION (DIRECT SUPABASE) ---
+const char *serverUrl =
+    "https://kdahubyhwndgyloaljak.supabase.co/rest/v1/production_logs";
+const char *apiKey =
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+    "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtkYWh1Ynlod25kZ3lsb2FsamFrIiwicm9sZSI6Im"
+    "Fub24iLCJpYXQiOjE3NjUzODY4ODksImV4cCI6MjA4MDk2Mjg4OX0.mzTtQ6zpfvRY07372UH_"
+    "M4dvKPzHBDkiydwosUYPs-8";
 
 // --- MACHINE CONFIGURATION ---
 const char *machineId = "T1.2-M01"; // Machine ID
-const int relayPin = 4;             // GPIO 4 (D4)
-const int ledPin = 2;               // Built-in LED (GPIO 2)
+const int relayPin = 5; // GPIO 5 (D5) - Changed from 4 to test hardware
+const int ledPin = 2;   // Built-in LED (GPIO 2)
 
 // --- VARIABLES ---
 int lastState = HIGH; // Relay is Normally Open (NO)
 unsigned long lastDebounceTime = 0;
-unsigned long debounceDelay = 10000; // 10 Seconds Cool-down (Anti-rapid fire)
+unsigned long debounceDelay =
+    240000; // 4 Minutes Cool-down (Production takes 5 mins) (Anti-rapid fire)
 
 void setup() {
   Serial.begin(115200);
@@ -49,21 +51,41 @@ void setup() {
 void loop() {
   int reading = digitalRead(relayPin);
 
+  // DEBUG: Print status every 1 second to confirm code is running
+  static unsigned long lastDebug = 0;
+  if (millis() - lastDebug > 1000) {
+    lastDebug = millis();
+    Serial.print("Pin State: ");
+    Serial.print(reading == LOW ? "LOW (Active)" : "HIGH (Open)");
+    Serial.print(" | Time since last trigger: ");
+    Serial.print((millis() - lastDebounceTime) / 1000);
+    Serial.println(" sec");
+  }
+
   // Detect signal change (Active LOW - Relay connects pin to GND)
   if (reading == LOW && lastState == HIGH) {
     if ((millis() - lastDebounceTime) > debounceDelay) {
+      Serial.println("Signal Detected! Waiting 1s for noise filter...");
 
       // CONFIRMED SIGNAL
-      Serial.println("ALARM DETECTED! Sending to server...");
+      // NOISE FILTER: Wait 1 SECOND (1000ms).
+      // Reduced from 2000ms to 1000ms as some signals were being missed.
+      delay(1000);
+      if (digitalRead(relayPin) == LOW) {
+        Serial.println("ALARM CONFIRMED! Sending (Count=2)...");
 
-      // Blink LED to indicate signal sent
-      digitalWrite(ledPin, LOW);
-      delay(100);
-      digitalWrite(ledPin, HIGH);
+        digitalWrite(ledPin, LOW);
+        delay(100);
+        digitalWrite(ledPin, HIGH);
 
-      sendAlarm();
+        sendAlarm();
 
-      lastDebounceTime = millis();
+        lastDebounceTime = millis();
+      } else {
+        Serial.println("Noise Spike Detected - Ignored.");
+      }
+    } else {
+      Serial.println("Ignored: In Cooling Period (4 mins)");
     }
   }
 
@@ -75,18 +97,18 @@ void sendAlarm() {
     HTTPClient http;
     WiFiClientSecure client;
 
-    // Check if using HTTPS (Vercel)
-    if (String(serverUrl).startsWith("https")) {
-      client.setInsecure(); // Ignore SSL certificate verification (Crucial for
-                            // Vercel/Let's Encrypt)
-      http.begin(client, serverUrl);
-    } else {
-      http.begin(serverUrl);
-    }
+    // Supabase requires HTTPS
+    client.setInsecure();
+    http.begin(client, serverUrl);
 
+    // Headers for Supabase Auth
     http.addHeader("Content-Type", "application/json");
+    http.addHeader("apikey", apiKey);
+    http.addHeader("Authorization", String("Bearer ") + apiKey);
+    http.addHeader("Prefer", "return=representation");
 
     // Format JSON: {"machine_id": "T1.2-M01", "alarm_count": 2}
+    // Note: product_sku is now handled by Database Trigger!
     String jsonPayload =
         String("{\"machine_id\": \"") + machineId + "\", \"alarm_count\": 2}";
 
@@ -94,7 +116,7 @@ void sendAlarm() {
 
     if (httpResponseCode > 0) {
       String response = http.getString();
-      Serial.print("Server Response: ");
+      Serial.print("DB Response: ");
       Serial.println(httpResponseCode);
       Serial.println(response);
     } else {
@@ -105,7 +127,6 @@ void sendAlarm() {
     http.end();
   } else {
     Serial.println("WiFi Disconnected");
-    // Try to reconnect
     WiFi.reconnect();
   }
 }
