@@ -1,8 +1,18 @@
 {
     "rewrites": [
         {
+            "source": "/api/agent/chat",
+            "destination": "/api/agent/chat"
+        },
+        {
             "source": "/(.*)",
             "destination": "/index.html"
         }
-    ]
+    ],
+    "functions": {
+        "api/agent/chat.ts": {
+            "maxDuration": 60,
+            "memory": 1024
+        }
+    }
 }

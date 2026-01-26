@@ -10,8 +10,8 @@ COPY package*.json ./
 RUN npm ci
 
 # Copy server source and other necessary files
-COPY server.ts .
-COPY .env* ./
+# Copy source code
+COPY . .
 
 # Expose port
 EXPOSE 8080

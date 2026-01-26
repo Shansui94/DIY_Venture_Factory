@@ -1,5 +1,5 @@
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
+
 
 /**
  * AI Supervisor Service
@@ -14,6 +14,7 @@ export const aiService = {
      */
     async askSupervisor(query: string, contextData: any): Promise<string> {
         const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY || '';
+        console.log(`[AI Service] Using API Key: ${apiKey ? apiKey.substring(0, 10) + '...' : 'MISSING'}`);
 
         try {
             // FALLBACK: Use direct REST API if SDK fails (which it is doing consistently with 404s)
@@ -60,8 +61,8 @@ export const aiService = {
 
             console.log("Using REST API for Gemini...");
             const apiVersion = "v1beta";
-            // Updated candidates based on actual available models for this Key
-            const candidates = ["gemini-2.0-flash", "gemini-flash-latest", "gemini-pro-latest"];
+            // Updated candidates based on verified available models (2026-01-25)
+            const candidates = ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-pro-latest"];
 
             let lastError;
 

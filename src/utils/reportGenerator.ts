@@ -95,7 +95,12 @@ export const generateSessionReport = (
     // Generate Table
     autoTable(doc, {
         head: [columns.map(c => c.header)],
-        body: tableData.map(row => Object.values(row)),
+        body: tableData.map(row => [
+            row.time,
+            row.job,
+            row.product,
+            row.qty
+        ]),
         startY: yPos + 35,
         theme: 'grid',
         headStyles: { fillColor: [44, 62, 80] },

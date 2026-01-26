@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Bot, X, Send, MessageSquare } from 'lucide-react';
 
 interface Message {
@@ -47,9 +47,8 @@ export default function AIAgentWidget() {
 
         try {
             // Call Backend API
-            // Note: Assumes server is running on localhost:8080 (dev environment) 
-            // In production, this should be relative or configured via env
-            const response = await fetch('http://localhost:8080/api/agent/chat', {
+            // Use relative path to leverage Vite Proxy (dev) or same-origin (prod)
+            const response = await fetch('/api/agent/chat', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -118,8 +117,8 @@ export default function AIAgentWidget() {
                             >
                                 <div
                                     className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm shadow-sm ${msg.sender === 'user'
-                                            ? 'bg-blue-600 text-white rounded-br-none'
-                                            : 'bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 rounded-bl-none prose prose-sm dark:prose-invert'
+                                        ? 'bg-blue-600 text-white rounded-br-none'
+                                        : 'bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 rounded-bl-none prose prose-sm dark:prose-invert'
                                         }`}
                                     style={{ whiteSpace: 'pre-wrap' }}
                                 >

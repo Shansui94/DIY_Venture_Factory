@@ -319,7 +319,7 @@ const DeliveryOrderManagement: React.FC = () => {
                 const base64Clean = base64Data.split(',')[1]; // Server expects raw base64
 
                 // Call Server Vision API
-                const response = await fetch('http://localhost:8080/api/agent/vision', {
+                const response = await fetch('/api/agent/vision', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ imageBase64: base64Clean })
@@ -394,8 +394,8 @@ const DeliveryOrderManagement: React.FC = () => {
                             key={status}
                             onClick={() => setStatusFilter(status)}
                             className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${statusFilter === status
-                                    ? 'bg-blue-600/20 text-blue-400 shadow-sm border border-blue-500/10'
-                                    : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
+                                ? 'bg-blue-600/20 text-blue-400 shadow-sm border border-blue-500/10'
+                                : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
                                 }`}
                         >
                             {status}
@@ -452,8 +452,8 @@ const DeliveryOrderManagement: React.FC = () => {
                                                 {order.orderNumber}
                                             </div>
                                             <div className={`text-[10px] font-bold px-2 py-0.5 rounded border ${order.status === 'New' ? 'text-amber-400 border-amber-500/20 bg-amber-500/10' :
-                                                    order.status === 'Delivered' ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' :
-                                                        'text-slate-400 border-slate-700 bg-slate-800'
+                                                order.status === 'Delivered' ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' :
+                                                    'text-slate-400 border-slate-700 bg-slate-800'
                                                 }`}>
                                                 {order.status}
                                             </div>

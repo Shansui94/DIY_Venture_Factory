@@ -2,14 +2,15 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../services/supabase';
 import Papa from 'papaparse';
 import {
-    Search, Plus, Save, Trash2, Database, Truck, Users,
-    AlertCircle, CheckCircle, X, Download, Cloud, FileText,
+    Search, Plus, Save, Trash2, Truck, Users,
+    AlertCircle, CheckCircle, X, Cloud,
     Package, Settings, LayoutGrid, FlaskConical, ChevronRight, Sparkles, Loader
 } from 'lucide-react';
 import { CommandDeck } from '../components/CommandDeck';
 
 import { AIChatWidget } from '../components/AIChatWidget';
 import { determineZone } from '../utils/logistics';
+
 
 
 // --- TYPES ---
@@ -96,7 +97,7 @@ const SmartImportModal = ({ isOpen, onClose, onImport, activeTab }: any) => {
         const base64Broken = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
 
         // Use hardcoded localhost:8080 matching server.ts default
-        const response = await fetch('http://localhost:8080/api/agent/vision', {
+        const response = await fetch('/api/agent/vision', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ imageBase64: base64Broken })
@@ -109,47 +110,45 @@ const SmartImportModal = ({ isOpen, onClose, onImport, activeTab }: any) => {
         return await response.json();
     };
 
-    const handleAnalyze = () => {
+    const handleAnalyze = async () => {
+        if (!text.trim()) return;
         setIsAnalyzing(true);
-        // SIMULATED AI PARSING (Regex Heuristics) for Text
-        setTimeout(() => {
-            const rows = text.split('\n').filter(line => line.trim());
-            const parsed = rows.map(line => {
-                // Heuristic: Try to split by tab, comma, or pipe
-                let parts = line.split(/,|\t|\|/).map(p => p.trim());
 
-                // If only one part, try to regex extract phone numbers
-                if (parts.length === 1) {
-                    // Try "Name Phone Address" pattern
-                    const phoneMatch = line.match(/(\+?6?0\d{1,2}-?\d{7,8})/);
-                    if (phoneMatch) {
-                        const phone = phoneMatch[0];
-                        const [name, address] = line.split(phone).map(p => p.trim());
-                        return { name, phone, address, raw: line };
-                    }
-                    return { name: line, raw: line };
-                }
-
-                if (activeTab === 'customers') {
-                    // Assume order: Name, Phone, Address OR Name, Address, Phone
-                    const [p1, p2, p3] = parts;
-                    // Check if p2 looks like phone
-                    if (p2 && (p2.startsWith('0') || p2.startsWith('+'))) {
-                        return { name: p1, phone: p2, address: p3, raw: line };
-                    }
-                    // Check if p3 looks like phone
-                    if (p3 && (p3.startsWith('0') || p3.startsWith('+'))) {
-                        return { name: p1, address: p2, phone: p3, raw: line };
-                    }
-                    return { name: p1, address: p2, phone: '', raw: line };
-                }
-
-                return { col1: parts[0], col2: parts[1], col3: parts[2], raw: line };
+        try {
+            // Call Backend Real AI
+            const response = await fetch('/api/agent/parse-text', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    text: text,
+                    type: activeTab // Pass current tab context (e.g. 'customers')
+                })
             });
 
-            setPreview(parsed);
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Analysis failed');
+            }
+
+            const parsed = await response.json();
+
+            // Normalize result for UI Preview
+            const normalized = parsed.map((r: any) => ({
+                // Keep original keys but ensure required UI keys exist
+                name: r.name || r.Name || r.title || r.col1 || 'Unknown',
+                phone: r.phone || r.Phone || r.tel || r.col2 || '',
+                address: r.address || r.Address || r.addr || r.col3 || '',
+                ...r // Keep everything else
+            }));
+
+            setPreview(normalized);
+
+        } catch (err: any) {
+            console.error(err);
+            alert('AI Analysis Failed: ' + err.message);
+        } finally {
             setIsAnalyzing(false);
-        }, 800);
+        }
     };
 
     if (!isOpen) return null;
@@ -310,7 +309,8 @@ export default function DataManagement() {
     const [search, setSearch] = useState('');
     const [selectedItem, setSelectedItem] = useState<DataItem | null>(null);
     const [form, setForm] = useState<any>({});
-    const [isDirty, setIsDirty] = useState(false);
+    const [, setIsDirty] = useState(false);
+
 
     // Smart Import State
     const [showSmartExport, setShowSmartImport] = useState(false);
@@ -471,32 +471,10 @@ export default function DataManagement() {
         }
     };
 
-    const handleExport = () => {
-        if (!filteredData || filteredData.length === 0) {
-            showToast('No data to export', 'error');
-            return;
-        }
 
-        // CSV Export Logic
-        const csv = Papa.unparse(filteredData.map(({ id, title, subtitle, ...rest }) => ({ id, ...rest })));
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        const url = URL.createObjectURL(blob);
-        link.setAttribute('href', url);
-        link.setAttribute('download', `${activeTab}_export_${new Date().toISOString().split('T')[0]}.csv`);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    };
 
     // --- IMPORT LOGIC ---
-    const handleImportClick = () => {
-        if (fileInputRef.current) {
-            fileInputRef.current.value = ''; // Reset
-            fileInputRef.current.click();
-        }
-    };
+
 
     // Unified Import Handler (Called by CSV or Smart Paste)
     const executeBatchImport = async (rows: any[]) => {

@@ -27,7 +27,6 @@ import UniversalIntake from './pages/UniversalIntake';
 import FactoryDashboard from './pages/FactoryDashboard';
 
 import { User, UserRole, InventoryItem, ProductionLog as ProductionLogType, JobOrder } from './types';
-import { VoiceCommand } from './components/VoiceCommand';
 import AIAgentWidget from './components/AIAgentWidget';
 import { determineZone } from './utils/logistics';
 import { supabase } from './services/supabase';
@@ -479,26 +478,7 @@ function App() {
 
     // handleProductionSubmit removed (Moved to ProductionControl)
 
-    const handleUpdateJob = async (jobId: string, updates: Partial<JobOrder>) => {
-        try {
-            // Map Legacy updates to Supabase Columns
-            // We need to map camelCase back to snake_case
-            const supaUpdates: any = {};
-            if (updates.status) supaUpdates.status = updates.status;
-            if (updates.produced !== undefined) supaUpdates.produced_qty = updates.produced;
-            if (updates.driverId) supaUpdates.driver_id = updates.driverId;
-            if (updates.deliveryStatus) supaUpdates.delivery_status = updates.deliveryStatus;
-
-            // Safe update using job_id fetch key
-            const { error } = await supabase.from('job_orders').update(supaUpdates).eq('job_id', jobId);
-
-            if (error) throw error;
-            // alert("Job Updated Successfully"); // Quiet update
-        } catch (error: any) {
-            console.error("Error updating job:", error);
-            alert("Update Failed: " + error.message);
-        }
-    };
+    // handleUpdateJob removed (unused)
 
     // ... (existing imports)
 
@@ -646,10 +626,9 @@ function App() {
         <ErrorBoundary>
             <Layout activePage={activePage} setActivePage={setActivePage} userRole={user?.role} user={user} onLogout={handleLogout}>
                 {renderContent()}
-                <VoiceCommand />
                 <AIAgentWidget />
                 <div className="fixed bottom-0 left-0 bg-red-600 text-white font-mono text-[10px] px-2 py-0.5 z-[9999] pointer-events-none">
-                    DEPLOY CHECK: v6.6 {new Date().toLocaleTimeString()}
+                    DEPLOY CHECK: v6.7 {new Date().toLocaleTimeString()}
                 </div>
             </Layout >
         </ErrorBoundary>

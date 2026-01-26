@@ -1,23 +1,64 @@
 import React, { useState, useRef } from 'react';
-import { Sparkles, Upload, ArrowRight, FileText, Image as ImageIcon, CheckCircle, AlertCircle, X } from 'lucide-react';
-import { supabase } from '../services/supabase';
+import { Sparkles, Upload, FileText, CheckCircle, AlertCircle, X } from 'lucide-react';
 
-// Mock AI Service for now (Will replace with real Gemini hook later)
+// Real AI Service
 const analyzeInput = async (text: string, file: File | null) => {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // 1. IMAGE HANDLING
+    if (file && file.type.startsWith('image/')) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = async () => {
+                try {
+                    const base64 = (reader.result as string).split(',')[1];
+                    const response = await fetch('/api/agent/vision', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ imageBase64: base64 })
+                    });
 
-    // Mock Classification
-    return {
-        type: 'CUSTOMER', // or 'RECEIPT', 'PO'
-        confidence: 0.95,
-        data: {
-            name: "Detected Name",
-            phone: "012-3456789",
-            address: "123 Factory Road, KL",
-            company_name: "Mock Company Sdn Bhd"
-        }
-    };
+                    if (!response.ok) throw new Error('AI Vision Failed');
+                    const data = await response.json();
+
+                    // Normalize Array to Single Object if needed
+                    let resultData = Array.isArray(data) ? data[0] : data;
+
+                    resolve({
+                        type: 'IMAGE_SCAN',
+                        confidence: 0.95, // Gemini doesn't always return confidence, assuming high if successful
+                        data: resultData
+                    });
+                } catch (e) {
+                    reject(e);
+                }
+            };
+            reader.onerror = reject;
+        });
+    }
+
+    // 2. TEXT HANDLING
+    if (text) {
+        const response = await fetch('/api/agent/parse-text', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                text: text,
+                type: 'customers' // Defaulting to customers for intake, or make dynamic later
+            })
+        });
+
+        if (!response.ok) throw new Error('AI Text Analysis Failed');
+        const data = await response.json();
+        const resultData = Array.isArray(data) ? data[0] : data;
+
+        return {
+            type: 'TEXT_INTAKE',
+            confidence: 0.90,
+            data: resultData
+        };
+    }
+
+    throw new Error("No input provided");
 };
 
 export default function UniversalIntake() {

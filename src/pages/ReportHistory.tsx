@@ -40,8 +40,6 @@ const ReportHistory: React.FC<ReportHistoryProps> = ({ user }) => {
 
         try {
             let mySystemId: string | null = null;
-
-            // 1. Resolve MY System ID
             const authId = user.uid;
             const { data: profile } = await supabase
                 .from('sys_users_v2')
@@ -51,85 +49,108 @@ const ReportHistory: React.FC<ReportHistoryProps> = ({ user }) => {
 
             if (profile) mySystemId = profile.id;
 
-            // 2. Fetch Users Map (Optimization for Boss View)
             let userMap: Record<string, any> = {};
-            if (viewMode === 'all') { // Only fetch map if we need names for everyone
+            if (viewMode === 'all') {
                 const { data: allUsers } = await supabase.from('sys_users_v2').select('id, name, email, employee_id');
-                if (allUsers) {
-                    allUsers.forEach(u => { userMap[u.id] = u; });
-                }
+                if (allUsers) allUsers.forEach(u => { userMap[u.id] = u; });
             } else {
-                // If mine, we know the user is 'profile' or 'user'
                 if (mySystemId && profile) userMap[mySystemId] = profile;
             }
 
-            // 3. Fetch Logs (No Join)
-            // CHANGED: Use 'production_logs' (V1) where firmware writes
-            let query = supabase
-                .from('production_logs')
-                .select('*') // No relationship join to avoid FK errors
-                .order('created_at', { ascending: false });
+            // PAGINATION LOGIC
+            // Supabase API limits to 1000 rows per request by default.
+            // We must loop to fetch all data within our date range (30 days).
 
-            // Apply Filters
-            if (viewMode === 'mine') {
-                if (mySystemId) {
-                    query = query.eq('operator_id', mySystemId);
-                } else {
-                    setLoading(false);
-                    return;
-                }
-            }
+            let allLogs: any[] = [];
+            let page = 0;
+            const pageSize = 1000;
+            let hasMore = true;
 
-            const { data, error } = await query;
+            // Default: Last 30 Days
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            const dateFilter = thirtyDaysAgo.toISOString();
 
-            if (error) {
-                console.error("Error fetching history:", error);
-            } else if (data) {
-                // Group by [Date + Operator] -> A "Session"
-                const groups: { [key: string]: { key: SessionKey, logs: ProductionLog[] } } = {};
+            while (hasMore) {
+                let query = supabase
+                    .from('production_logs')
+                    .select('*')
+                    .order('created_at', { ascending: false })
+                    .range(page * pageSize, (page + 1) * pageSize - 1)
+                    .gte('created_at', dateFilter);
 
-                data.forEach((log: any) => {
-                    const dateStr = new Date(log.created_at).toLocaleDateString();
-                    // Resolve Operator from Map
-                    const opId = log.operator_id;
-                    const opUser = opId ? userMap[opId] : null;
-
-                    const opName = opUser?.name || (opId ? 'Unknown Operator' : 'Automatic Machine Log');
-                    const opEmail = opUser?.email || 'N/A';
-
-                    // Composite Key: Date_OperatorID (Use 'AUTO' for null operator)
-                    const uniqueKey = `${dateStr}_${opId || 'AUTO'}`;
-
-                    if (!groups[uniqueKey]) {
-                        groups[uniqueKey] = {
-                            key: {
-                                date: dateStr,
-                                operatorId: opId || 'AUTO',
-                                operatorName: opName,
-                                operatorEmail: opEmail
-                            },
-                            logs: []
-                        };
+                if (viewMode === 'mine') {
+                    if (mySystemId) {
+                        query = query.eq('operator_id', mySystemId);
+                    } else {
+                        break; // Should not happen
                     }
+                }
 
-                    groups[uniqueKey].logs.push({
-                        Log_ID: log.id, // V1 uses 'id'
-                        Timestamp: log.created_at,
-                        Job_ID: log.job_id || log.machine_id, // Map machine_id if job_id missing
-                        Operator_Email: opEmail,
-                        Output_Qty: log.alarm_count || 1, // Map alarm_count
-                        Note: log.product_sku, // Map SKU to Note
-                        formattedDate: dateStr
-                    } as any);
-                });
+                const { data, error } = await query;
 
-                // Convert to array and sort desc by Date
-                const sessionList = Object.values(groups).sort((a, b) =>
-                    new Date(b.key.date).getTime() - new Date(a.key.date).getTime()
-                );
+                if (error) {
+                    console.error("Error fetching history page " + page, error);
+                    break;
+                }
 
-                setSessions(sessionList);
+                if (data && data.length > 0) {
+                    allLogs = [...allLogs, ...data];
+                    if (data.length < pageSize) {
+                        hasMore = false; // Less than 1000 means we reached the end
+                    } else {
+                        page++; // Fetch next page
+                    }
+                } else {
+                    hasMore = false;
+                }
+
+                // Safety break to prevent infinite loops (e.g. max 10k rows)
+                if (allLogs.length >= 10000) break;
             }
+
+            // Process Data (Group by Session)
+            const groups: { [key: string]: { key: SessionKey, logs: ProductionLog[] } } = {};
+
+            allLogs.forEach((log: any) => {
+                const dateStr = new Date(log.created_at).toLocaleDateString();
+                const opId = log.operator_id;
+                const opUser = opId ? userMap[opId] : null;
+
+                const opName = opUser?.name || (opId ? 'Unknown Operator' : 'Automatic Machine Log');
+                const opEmail = opUser?.email || 'N/A';
+
+                const uniqueKey = `${dateStr}_${opId || 'AUTO'}`;
+
+                if (!groups[uniqueKey]) {
+                    groups[uniqueKey] = {
+                        key: {
+                            date: dateStr,
+                            operatorId: opId || 'AUTO',
+                            operatorName: opName,
+                            operatorEmail: opEmail
+                        },
+                        logs: []
+                    };
+                }
+
+                groups[uniqueKey].logs.push({
+                    Log_ID: log.id,
+                    Timestamp: log.created_at,
+                    Job_ID: log.job_id || log.machine_id,
+                    Operator_Email: opEmail,
+                    Output_Qty: log.alarm_count || 1,
+                    Note: log.product_sku,
+                    formattedDate: dateStr
+                } as any);
+            });
+
+            const sessionList = Object.values(groups).sort((a, b) =>
+                new Date(b.key.date).getTime() - new Date(a.key.date).getTime()
+            );
+
+            setSessions(sessionList);
+
         } catch (err) {
             console.error("History load failed:", err);
         }

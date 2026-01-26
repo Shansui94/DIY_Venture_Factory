@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
-import { Download, Calendar, Search, Filter, Database, Clock, FileText, User, MapPin } from 'lucide-react';
+import { Download, Calendar, Search, Filter, Database, Clock, FileText, User } from 'lucide-react';
 import { ProductionLog as ProductionLogType, UserRole } from '../types';
 
 interface ProductionLogProps {
@@ -19,12 +19,12 @@ const ProductionLog: React.FC<ProductionLogProps> = ({ userRole }) => {
     const fetchLogs = async () => {
         setLoading(true);
         try {
-            // Using production_logs_v2 for real data
+            // FIXED: Point to 'production_logs' (V1) because server.ts writes there
             let query = supabase
-                .from('production_logs_v2')
+                .from('production_logs')
                 .select('*')
                 .order('created_at', { ascending: false })
-                .limit(100); // Pagination in V2
+                .limit(5000); // Increased from default 1000 to 5000
 
             if (filterDate) {
                 const startOfDay = new Date(filterDate);
@@ -35,12 +35,31 @@ const ProductionLog: React.FC<ProductionLogProps> = ({ userRole }) => {
                 query = query
                     .gte('created_at', startOfDay.toISOString())
                     .lte('created_at', endOfDay.toISOString());
+            } else {
+                // Default to last 30 days
+                const thirtyDaysAgo = new Date();
+                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+                query = query.gte('created_at', thirtyDaysAgo.toISOString());
             }
 
             const { data, error } = await query;
 
+            console.log("Production Logs Query Result:", {
+                dataLength: data?.length,
+                queryError: error,
+                firstLogDate: data?.[0]?.created_at,
+                lastLogDate: data?.[data?.length - 1]?.created_at
+            });
+
             if (data) {
-                setLogs(data);
+                // Map V1 columns to V2 interface for UI compatibility
+                const mappedData = data.map((item: any) => ({
+                    ...item,
+                    quantity_produced: item.alarm_count || 1, // Map alarm_count to quantity
+                    product_id: item.product_sku || 'UNKNOWN', // Map SKU
+                    unit_id: 'Unit'
+                }));
+                setLogs(mappedData);
             }
         } catch (err) {
             console.error("Error fetching logs:", err);
@@ -57,10 +76,14 @@ const ProductionLog: React.FC<ProductionLogProps> = ({ userRole }) => {
     const totalOutput = logs.reduce((sum, log) => sum + (log.quantity_produced || 0), 0);
     const totalSessions = new Set(logs.map(l => l.session_id)).size;
 
-    const filteredLogs = logs.filter(log =>
-    (log.job_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        log.operator_id?.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
+    const filteredLogs = logs.filter(log => {
+        const term = searchTerm.toLowerCase();
+        const job = (log.job_id || '').toLowerCase();
+        const op = (log.operator_id || '').toLowerCase();
+        const prod = (log.product_id || '').toLowerCase();
+
+        return job.includes(term) || op.includes(term) || prod.includes(term);
+    });
 
     const handleExport = () => {
         if (!logs.length) return;
