@@ -609,7 +609,8 @@ const SimpleStock: React.FC<SimpleStockProps> = ({ onClose, isModal = false }) =
                 </button>
 
             </div>
-            );
+        </div>
+    );
 };
 
-            export default SimpleStock;
+export default SimpleStock;
