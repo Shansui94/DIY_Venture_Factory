@@ -473,27 +473,13 @@ const DeliveryOrderManagement: React.FC = () => {
                     </h1>
                     <p className="text-slate-400 mt-1 font-medium">Assign orders, track shipments, and manage fleet.</p>
                 </div>
-                <div className="flex items-center gap-3">
-                    <button
-                        onClick={() => {
-                            setEditingOrderId(null); // Ensure Create Mode
-                            setNewOrderNotes(''); // Reset Notes
-                            setNewOrderItems([]);
-                            setIsCreateModalOpen(true);
-                        }}
-                        className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl flex items-center gap-2 font-bold shadow-lg shadow-blue-900/20 transition-all active:scale-95"
-                    >
-                        <Plus size={20} />
-                        New Order
-                    </button>
-                    <button
-                        onClick={() => setIsStockOutOpen(true)}
-                        className="group relative bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white px-6 py-3 rounded-xl flex items-center gap-3 font-bold shadow-xl shadow-red-900/20 transition-all active:scale-95"
-                    >
-                        <Zap size={20} className="fill-white" />
-                        Quick Stock Out
-                    </button>
-                </div>
+                <button
+                    onClick={() => setIsStockOutOpen(true)}
+                    className="group relative bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white px-6 py-3 rounded-xl flex items-center gap-3 font-bold shadow-xl shadow-blue-900/20 transition-all active:scale-95"
+                >
+                    <Plus size={20} />
+                    New Order
+                </button>
             </div>
 
             {/* --- FILTERS & STATS --- */}

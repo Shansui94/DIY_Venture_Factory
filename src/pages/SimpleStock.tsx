@@ -412,7 +412,7 @@ const SimpleStock: React.FC<SimpleStockProps> = ({ onClose, isModal = false }) =
                             </button>
                         )}
                         <h1 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-orange-400">
-                            DIRECT STOCK OUT
+                            NEW ORDER
                         </h1>
                     </div>
                     <button onClick={loadData} disabled={loading} className="p-2 bg-slate-900 rounded-full hover:bg-slate-800">
