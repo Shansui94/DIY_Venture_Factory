@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
-import { getRecommendedPackaging } from '../utils/packagingRules';
 import { getV2Items } from '../services/apiV2';
 import { determineZone, findBestFactory } from '../utils/logistics';
 import {
@@ -170,39 +169,11 @@ const DeliveryOrderManagement: React.FC = () => {
     const [itemSearchTerm, setItemSearchTerm] = useState('');
     const [selectedV2Item, setSelectedV2Item] = useState<V2Item | null>(null);
 
-    // -- Mode B: Manual Builder --
-    const [currentItemLayer, setCurrentItemLayer] = useState<ProductLayer>('Single');
-    const [currentItemMaterial, setCurrentItemMaterial] = useState<ProductMaterial>('Clear');
-    const [currentItemSize, setCurrentItemSize] = useState<ProductSize>('50cm');
-    const [currentItemPackaging, setCurrentItemPackaging] = useState<PackagingColor>('Orange');
-    const [currentItemProductDesc, setCurrentItemProductDesc] = useState('');
-    const [currentItemSku, setCurrentItemSku] = useState('');
-
     // Shared Additional Info
     const [currentItemRemark, setCurrentItemRemark] = useState('');
     const [currentItemQty, setCurrentItemQty] = useState(0);
 
     // --- EFFECTS ---
-
-    // Auto-calculate packaging & SKU (Manual Mode)
-    useEffect(() => {
-        const recommended = getRecommendedPackaging(currentItemLayer, currentItemMaterial, currentItemSize);
-        if (recommended) setCurrentItemPackaging(recommended);
-
-        const wCode = PRODUCT_SIZES.find(s => s.value === currentItemSize)?.code;
-        const mCode = PRODUCT_MATERIALS.find(m => m.value === currentItemMaterial)?.code;
-        const lCode = PRODUCT_LAYERS.find(l => l.value === currentItemLayer)?.code;
-        const cCode = PACKAGING_COLORS.find(c => c.value === recommended)?.code;
-        const sku = `PROD-BW-${lCode}${wCode}-${mCode}-${cCode}`;
-
-        const layerLabel = PRODUCT_LAYERS.find(l => l.value === currentItemLayer)?.label || currentItemLayer;
-        const materialLabel = PRODUCT_MATERIALS.find(m => m.value === currentItemMaterial)?.label || currentItemMaterial;
-        const sizeLabel = PRODUCT_SIZES.find(s => s.value === currentItemSize)?.label || currentItemSize;
-        const description = `Bubble Wrap ${sizeLabel} ${layerLabel} Layer ${materialLabel}`;
-
-        setCurrentItemSku(sku);
-        setCurrentItemProductDesc(description);
-    }, [currentItemLayer, currentItemMaterial, currentItemSize]);
 
     // Fetch Data
     const fetchData = async () => {
@@ -324,36 +295,15 @@ const DeliveryOrderManagement: React.FC = () => {
 
     const handleAddItem = () => {
         if (currentItemQty <= 0) return alert("Please enter a valid quantity.");
+        if (!selectedV2Item) return alert("Please select a product.");
 
-        let newItem: any = {};
-        if (entryMode === 'search') {
-            if (!selectedV2Item) return alert("Please select a product.");
-
-            // Stock Check REMOVED
-            // const currentStock = stockMap[selectedV2Item.sku] || 0;
-            // if (currentItemQty > currentStock) {
-            //    if (!window.confirm(`⚠️ Insufficient Stock!\nAvailable: ${currentStock}\nProceed anyway?`)) return;
-            // }
-
-            newItem = {
-                product: selectedV2Item.name,
-                sku: selectedV2Item.sku,
-                quantity: currentItemQty,
-                remark: currentItemRemark,
-                packaging: selectedV2Item.uom || 'Unit'
-            };
-        } else {
-            newItem = {
-                product: currentItemProductDesc,
-                sku: currentItemSku,
-                layer: currentItemLayer,
-                material: currentItemMaterial,
-                packaging: currentItemPackaging,
-                size: currentItemSize,
-                quantity: currentItemQty,
-                remark: currentItemRemark
-            };
-        }
+        const newItem = {
+            product: selectedV2Item.name,
+            sku: selectedV2Item.sku,
+            quantity: currentItemQty,
+            remark: currentItemRemark,
+            packaging: selectedV2Item.uom || 'Unit'
+        };
 
         setNewOrderItems([...newOrderItems, newItem]);
         setCurrentItemQty(0);
@@ -615,9 +565,9 @@ const DeliveryOrderManagement: React.FC = () => {
                                                 {order.orderNumber}
                                             </div>
                                             <div className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider border ${order.status === 'New' ? 'text-amber-400 border-amber-500/20 bg-amber-500/10' :
-                                                    order.status === 'Delivered' ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' :
-                                                        order.status === 'Pending Approval' ? 'text-red-400 border-red-500/20 bg-red-500/10 animate-pulse' :
-                                                            'text-slate-400 border-slate-700 bg-slate-800'
+                                                order.status === 'Delivered' ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' :
+                                                    order.status === 'Pending Approval' ? 'text-red-400 border-red-500/20 bg-red-500/10 animate-pulse' :
+                                                        'text-slate-400 border-slate-700 bg-slate-800'
                                                 }`}>
                                                 {order.status}
                                             </div>
