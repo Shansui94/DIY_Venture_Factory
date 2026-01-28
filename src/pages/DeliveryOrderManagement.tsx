@@ -525,7 +525,7 @@ const DeliveryOrderManagement: React.FC = () => {
             </div>
 
             {/* --- MAIN GRID --- */}
-            <DragDropContext onDragEnd={onDragEnd}>
+            <Dnd.DragDropContext onDragEnd={onDragEnd}>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                     {drivers.map(driver => {
                         const driverOrders = filteredOrders.filter(o => o.driverId === driver.uid);
@@ -551,7 +551,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                 </div>
 
                                 {/* Orders List (Droppable) */}
-                                <Droppable droppableId={driver.uid}>
+                                <Dnd.Droppable droppableId={driver.uid}>
                                     {(provided, snapshot) => (
                                         <div
                                             ref={provided.innerRef}
@@ -559,7 +559,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                             className={`flex-1 p-3 space-y-3 max-h-[600px] overflow-y-auto custom-scrollbar bg-[#09090b] ${snapshot.isDraggingOver ? 'bg-slate-900/50' : ''}`}
                                         >
                                             {driverOrders.map((order, index) => (
-                                                <Draggable key={order.id} draggableId={order.id} index={index}>
+                                                <Dnd.Draggable key={order.id} draggableId={order.id} index={index}>
                                                     {(provided, snapshot) => (
                                                         <div
                                                             ref={provided.innerRef}
@@ -639,12 +639,12 @@ const DeliveryOrderManagement: React.FC = () => {
                                                             )}
                                                         </div>
                                                     )}
-                                                </Draggable>
+                                                </Dnd.Draggable>
                                             ))}
                                             {provided.placeholder}
                                         </div>
                                     )}
-                                </Droppable>
+                                </Dnd.Droppable>
                                 {driverOrders.length === 0 && (
                                     <div className="h-40 flex flex-col items-center justify-center text-slate-700 opacity-50">
                                         <Truck size={40} className="mb-3" />
@@ -655,7 +655,7 @@ const DeliveryOrderManagement: React.FC = () => {
                         );
                     })}
                 </div>
-            </DragDropContext>
+            </Dnd.DragDropContext>
 
             {/* --- CREATE / EDIT MODAL --- */}
             {
