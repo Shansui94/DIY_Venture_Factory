@@ -647,9 +647,9 @@ const DeliveryOrderManagement: React.FC = () => {
                                     <div className="h-40 flex flex-col items-center justify-center text-slate-700 opacity-50">
                                         <Truck size={40} className="mb-3" />
                                         <span className="text-xs font-bold uppercase tracking-wider">No Active Orders</span>
-                                )}
                                     </div>
-                        </div>
+                                )}
+                            </div>
                         );
                     })}
                 </div>
