@@ -481,136 +481,135 @@ const SimpleStock: React.FC<SimpleStockProps> = ({ onClose, isModal = false }) =
                     </div>
                 </div>
 
-            </div>
 
-            {/* Batch Notes (Noted) */}
-            <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800 shadow-lg">
-                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-2">Order Notes (Batch Remark)</label>
-                <textarea
-                    rows={2}
-                    placeholder="Enter general notes for this stock out..."
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-300 focus:border-blue-500/50 outline-none placeholder:text-slate-600 resize-none"
-                    value={batchNotes}
-                    onChange={e => setBatchNotes(e.target.value)}
-                />
-            </div>
 
-            {/* 2. WHAT (Items List + Add Row) */}
-            <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800 shadow-lg min-h-[400px] flex flex-col">
-                <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase mb-3">
-                    <Package size={12} /> Items List
+                {/* Batch Notes (Noted) */}
+                <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800 shadow-lg">
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-2">Order Notes (Batch Remark)</label>
+                    <textarea
+                        rows={2}
+                        placeholder="Enter general notes for this stock out..."
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-300 focus:border-blue-500/50 outline-none placeholder:text-slate-600 resize-none"
+                        value={batchNotes}
+                        onChange={e => setBatchNotes(e.target.value)}
+                    />
                 </div>
 
-                {/* EXISTING ITEMS */}
-                <div className="flex-1 space-y-2 mb-4">
-                    {cart.length === 0 ? (
-                        <div className="text-center py-8 text-slate-700 text-sm italic border-2 border-dashed border-slate-800 rounded-xl">
-                            List empty. Add items below.
-                        </div>
-                    ) : (
-                        cart.map((item, idx) => (
-                            <div key={item.id + idx} className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex justify-between items-center group hover:border-slate-700 transition-colors">
-                                <div className="flex-1">
-                                    <div className="font-bold text-white text-sm">{item.name}</div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-[10px] text-slate-500 font-mono">{item.id}</span>
-                                        <span className="text-[10px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded uppercase font-bold border border-blue-500/20">
-                                            {item.location}
-                                        </span>
-                                        {item.remark && (
-                                            <span className="text-[10px] text-slate-400 italic">
-                                                — {item.remark}
+                {/* 2. WHAT (Items List + Add Row) */}
+                <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800 shadow-lg min-h-[400px] flex flex-col">
+                    <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase mb-3">
+                        <Package size={12} /> Items List
+                    </div>
+
+                    {/* EXISTING ITEMS */}
+                    <div className="flex-1 space-y-2 mb-4">
+                        {cart.length === 0 ? (
+                            <div className="text-center py-8 text-slate-700 text-sm italic border-2 border-dashed border-slate-800 rounded-xl">
+                                List empty. Add items below.
+                            </div>
+                        ) : (
+                            cart.map((item, idx) => (
+                                <div key={item.id + idx} className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex justify-between items-center group hover:border-slate-700 transition-colors">
+                                    <div className="flex-1">
+                                        <div className="font-bold text-white text-sm">{item.name}</div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[10px] text-slate-500 font-mono">{item.id}</span>
+                                            <span className="text-[10px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded uppercase font-bold border border-blue-500/20">
+                                                {item.location}
                                             </span>
-                                        )}
+                                            {item.remark && (
+                                                <span className="text-[10px] text-slate-400 italic">
+                                                    — {item.remark}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <div className="text-sm font-bold text-orange-400 bg-slate-900 px-2 py-1 rounded">
+                                            x {item.quantity} {item.uom}
+                                        </div>
+                                        <button onClick={() => handleRemoveInfoCart(item.id)} className="text-slate-600 hover:text-red-500 p-1">
+                                            <X size={16} />
+                                        </button>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-3">
-                                    <div className="text-sm font-bold text-orange-400 bg-slate-900 px-2 py-1 rounded">
-                                        x {item.quantity} {item.uom}
-                                    </div>
-                                    <button onClick={() => handleRemoveInfoCart(item.id)} className="text-slate-600 hover:text-red-500 p-1">
-                                        <X size={16} />
-                                    </button>
-                                </div>
-                            </div>
-                        ))
-                    )}
-                </div>
-
-                {/* ADD ROW (integrated at bottom) */}
-                <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700/50 flex flex-col gap-3">
-                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Quick Add</div>
-
-                    {/* Location Select inside Add Row */}
-                    <SearchableSelect
-                        label="Source Location"
-                        placeholder="Select Origin..."
-                        options={locationOptions}
-                        value={stockLocation}
-                        onChange={setStockLocation}
-                        minimal
-                    />
-
-                    <SearchableSelect
-                        placeholder="Select Product..."
-                        options={productOptions}
-                        value={selectedSku}
-                        onChange={setSelectedSku}
-                        minimal
-                    />
-
-                    <div className="flex gap-2 items-center">
-                        {selectedItem && (
-                            <div className={`text-xs px-2 py-1 rounded border ${(stockMap[selectedSku] || 0) < 100 ? 'bg-red-500/10 border-red-500/30 text-red-500' : 'bg-green-500/10 border-green-500/30 text-green-500'
-                                }`}>
-                                Stack: {stockMap[selectedSku] || 0}
-                            </div>
+                            ))
                         )}
-                        <div className="flex-1"></div>
-                        <input
-                            type="number"
-                            placeholder="Qty"
-                            value={addQty}
-                            onChange={e => setAddQty(Number(e.target.value))}
-                            onKeyDown={handleKeyDown}
-                            className="w-24 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-right font-bold outline-none focus:border-orange-500"
-                        />
                     </div>
-                    {/* Item Remark Input */}
-                    <div className="flex gap-2">
-                        <input
-                            type="text"
-                            placeholder="Item Remark (Optional)..."
-                            className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-slate-300 text-xs outline-none focus:border-blue-500 placeholder:text-slate-600"
-                            value={addRemark}
-                            onChange={e => setAddRemark(e.target.value)}
-                            onKeyDown={handleKeyDown}
+
+                    {/* ADD ROW (integrated at bottom) */}
+                    <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700/50 flex flex-col gap-3">
+                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Quick Add</div>
+
+                        {/* Location Select inside Add Row */}
+                        <SearchableSelect
+                            label="Source Location"
+                            placeholder="Select Origin..."
+                            options={locationOptions}
+                            value={stockLocation}
+                            onChange={setStockLocation}
+                            minimal
                         />
-                        <button
-                            onClick={handleAddToCart}
-                            disabled={!selectedSku || !addQty}
-                            className="bg-slate-700 hover:bg-slate-600 text-white rounded-lg px-4 disabled:opacity-50"
-                        >
-                            <Plus size={20} />
-                        </button>
+
+                        <SearchableSelect
+                            placeholder="Select Product..."
+                            options={productOptions}
+                            value={selectedSku}
+                            onChange={setSelectedSku}
+                            minimal
+                        />
+
+                        <div className="flex gap-2 items-center">
+                            {selectedItem && (
+                                <div className={`text-xs px-2 py-1 rounded border ${(stockMap[selectedSku] || 0) < 100 ? 'bg-red-500/10 border-red-500/30 text-red-500' : 'bg-green-500/10 border-green-500/30 text-green-500'
+                                    }`}>
+                                    Stack: {stockMap[selectedSku] || 0}
+                                </div>
+                            )}
+                            <div className="flex-1"></div>
+                            <input
+                                type="number"
+                                placeholder="Qty"
+                                value={addQty}
+                                onChange={e => setAddQty(Number(e.target.value))}
+                                onKeyDown={handleKeyDown}
+                                className="w-24 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-right font-bold outline-none focus:border-orange-500"
+                            />
+                        </div>
+                        {/* Item Remark Input */}
+                        <div className="flex gap-2">
+                            <input
+                                type="text"
+                                placeholder="Item Remark (Optional)..."
+                                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-slate-300 text-xs outline-none focus:border-blue-500 placeholder:text-slate-600"
+                                value={addRemark}
+                                onChange={e => setAddRemark(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                            />
+                            <button
+                                onClick={handleAddToCart}
+                                disabled={!selectedSku || !addQty}
+                                className="bg-slate-700 hover:bg-slate-600 text-white rounded-lg px-4 disabled:opacity-50"
+                            >
+                                <Plus size={20} />
+                            </button>
+                        </div>
                     </div>
                 </div>
+
+                {/* 3. SUBMIT (Sticky Bottom or Just Bottom) */}
+                <button
+                    onClick={handleBatchSubmit}
+                    disabled={submitting || cart.length === 0}
+                    className="w-full py-4 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white rounded-2xl font-black text-lg uppercase shadow-xl shadow-red-900/30 flex items-center justify-center gap-3 disabled:opacity-50 disabled:grayscale transition-all active:scale-[0.98] mt-4"
+                >
+                    {submitting ? 'Processing...' : (
+                        <>CONFIRM ORDER ({cart.length}) <Send size={20} /></>
+                    )}
+                </button>
+
             </div>
-
-            {/* 3. SUBMIT (Sticky Bottom or Just Bottom) */}
-            <button
-                onClick={handleBatchSubmit}
-                disabled={submitting || cart.length === 0}
-                className="w-full py-4 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white rounded-2xl font-black text-lg uppercase shadow-xl shadow-red-900/30 flex items-center justify-center gap-3 disabled:opacity-50 disabled:grayscale transition-all active:scale-[0.98] mt-4"
-            >
-                {submitting ? 'Processing...' : (
-                    <>CONFIRM ORDER ({cart.length}) <Send size={20} /></>
-                )}
-            </button>
-
-        </div>
-        </div >
-    );
+            );
 };
 
-export default SimpleStock;
+            export default SimpleStock;
