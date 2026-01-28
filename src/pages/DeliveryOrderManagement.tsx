@@ -5,23 +5,14 @@ import { getV2Items } from '../services/apiV2';
 import { determineZone, findBestFactory } from '../utils/logistics';
 import {
     Plus, Search, Calendar, FileText, X, Truck,
-    User as UserIcon, ListFilter, Box, Sparkles, Zap
+    User as UserIcon, Box, Zap
 } from 'lucide-react';
 import {
     SalesOrder,
-    ProductLayer,
-    ProductMaterial,
-    PackagingColor,
-    ProductSize,
     User
 } from '../types';
 import { V2Item } from '../types/v2';
-import {
-    PRODUCT_LAYERS,
-    PRODUCT_MATERIALS,
-    PACKAGING_COLORS,
-    PRODUCT_SIZES
-} from '../data/constants';
+
 import SimpleStock from './SimpleStock';
 
 // Reusable Searchable Select Component (Ported from SimpleStock for consistency)
