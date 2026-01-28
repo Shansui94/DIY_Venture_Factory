@@ -556,250 +556,328 @@ const DeliveryOrderManagement: React.FC = () => {
                                             {...provided.droppableProps}
                                             className={`flex-1 p-3 space-y-3 max-h-[600px] overflow-y-auto custom-scrollbar bg-[#09090b] ${snapshot.isDraggingOver ? 'bg-slate-900/50' : ''}`}
                                         >
-                                            className="w-full py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-lg font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-red-900/30 transition-all active:scale-95"
-                                                >
-                                            <Zap size={14} className="fill-white" /> Approve & Deduct Stock
-                                        </button>
-                                            </div>
-                        )
-                    }
+                                            {driverOrders.map((order, index) => (
+                                                <Draggable key={order.id} draggableId={order.id} index={index}>
+                                                    {(provided, snapshot) => (
+                                                        <div
+                                                            ref={provided.innerRef}
+                                                            {...provided.draggableProps}
+                                                            {...provided.dragHandleProps}
+                                                            onClick={() => {
+                                                                setEditingOrderId(order.id);
+                                                                setSelectedDriverId(order.driverId || '');
+                                                                setOrderCustomer(order.customer);
+                                                                setNewOrderAddress(order.deliveryAddress || '');
+                                                                setNewOrderDeliveryDate(order.deadline || '');
+                                                                setNewOrderNotes(order.notes || '');
+                                                                setNewOrderItems(order.items || []);
+                                                                setIsCreateModalOpen(true);
+                                                            }}
+                                                            style={{ ...provided.draggableProps.style }}
+                                                            className={`bg-[#18181b] border border-[#27272a] p-4 rounded-xl hover:bg-[#27272a] hover:border-blue-500/50 cursor-pointer transition-all relative group/card shadow-sm ${snapshot.isDragging ? 'shadow-2xl border-blue-500 z-50' : ''}`}
+                                                        >
+                                                            {/* Trip Sequence Badge */}
+                                                            <div className="absolute -top-2 -right-2 bg-slate-950 border border-slate-700 text-slate-400 text-[9px] font-bold uppercase py-0.5 px-2 rounded-full shadow-lg z-10">
+                                                                {index + 1}{index === 0 ? 'st' : index === 1 ? 'nd' : index === 2 ? 'rd' : 'th'} Trip
+                                                            </div>
+
+                                                            <div className="flex justify-between items-start mb-2">
+                                                                <div className="font-mono text-sm font-black text-blue-400 bg-blue-500/10 px-2 py-1 rounded border border-blue-500/20 tracking-wide">
+                                                                    {order.orderNumber}
+                                                                </div>
+                                                                <div className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider border ${order.status === 'New' ? 'text-amber-400 border-amber-500/20 bg-amber-500/10' :
+                                                                    order.status === 'Delivered' ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' :
+                                                                        order.status === 'Pending Approval' ? 'text-red-400 border-red-500/20 bg-red-500/10 animate-pulse' :
+                                                                            'text-slate-400 border-slate-700 bg-slate-800'
+                                                                    }`}>
+                                                                    {order.status}
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="text-xs text-slate-500 flex items-center gap-2 mb-3 line-clamp-1">
+                                                                <Calendar size={12} className="text-slate-600" />
+                                                                <span className={!order.orderDate ? 'opacity-50' : ''}>{order.orderDate || 'No Date'}</span>
+                                                            </div>
+
+                                                            {/* Items Preview */}
+                                                            <div className="space-y-1.5 bg-[#121214] p-3 rounded-lg border border-[#27272a]">
+                                                                {order.items?.length === 0 ? (
+                                                                    <div className="text-[10px] text-slate-600 italic text-center py-1">No Items</div>
+                                                                ) : (
+                                                                    order.items?.slice(0, 3).map((item, i) => (
+                                                                        <div key={i} className="text-[11px] flex justify-between items-center gap-2">
+                                                                            <div className="flex items-center gap-2 overflow-hidden">
+                                                                                <div className="w-1 h-1 rounded-full bg-slate-600 shrink-0"></div>
+                                                                                <span className="text-slate-400 truncate">{item.product}</span>
+                                                                            </div>
+                                                                            <span className="text-slate-200 font-bold font-mono whitespace-nowrap">x{item.quantity}</span>
+                                                                        </div>
+                                                                    ))
+                                                                )}
+                                                                {order.items && order.items.length > 3 && (
+                                                                    <div className="text-[9px] text-zinc-600 font-bold text-center pt-1 uppercase tracking-wide">
+                                                                        + {order.items.length - 3} more
+                                                                    </div>
+                                                                )}
+                                                            </div>
+
+                                                            {/* APPROVE BUTTON FOR VIVIAN */}
+                                                            {order.status === 'Pending Approval' && (
+                                                                <div className="mt-4">
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleApproveAmendment(order);
+                                                                        }}
+                                                                        className="w-full py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-lg font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-red-900/30 transition-all active:scale-95"
+                                                                    >
+                                                                        <Zap size={14} className="fill-white" /> Approve & Deduct Stock
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </Draggable>
+                                            ))}
+                                            {provided.placeholder}
+                                        </div>
+                                    )}
+                                </Droppable>
+                                {driverOrders.length === 0 && (
+                                    <div className="h-40 flex flex-col items-center justify-center text-slate-700 opacity-50">
+                                        <Truck size={40} className="mb-3" />
+                                        <span className="text-xs font-bold uppercase tracking-wider">No Active Orders</span>
                                     </div>
-                                ))}
-                {driverOrders.length === 0 && (
-                    <div className="h-40 flex flex-col items-center justify-center text-slate-700 opacity-50">
-                        <Truck size={40} className="mb-3" />
-                        <span className="text-xs font-bold uppercase tracking-wider">No Active Orders</span>
-                    </div>
-                )}
-        </div>
+                                )}
+                            </div>
                         </div >
-                    );
+                );
                 })}
-            </div >
+        </div >
 
     {/* --- CREATE / EDIT MODAL --- */ }
-{
-    isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-slate-950 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl shadow-black">
-                {/* Modal Header */}
-                <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
-                    <div>
-                        <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
-                            {editingOrderId ? <FileText className="text-blue-400" /> : <Plus className="text-blue-400" />}
-                            {editingOrderId ? 'Edit Order' : 'Create New Order'}
-                        </h2>
-                        <p className="text-xs text-slate-500 mt-1">Manage order details and items.</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <button onClick={handleCloseModal} className="p-2 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-white transition-all">
-                            <X size={20} />
-                        </button>
-                    </div>
-                </div>
-
-                {/* Modal Body */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-slate-950">
-
-                    {/* Section 1: Basic Info (Simpler) */}
-                    <div className="grid grid-cols-2 gap-4">
+    {
+        isCreateModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="bg-slate-950 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl shadow-black">
+                    {/* Modal Header */}
+                    <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
                         <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Assigned Driver</label>
-                            <div className="relative">
-                                <UserIcon className="absolute left-3 top-3 text-slate-600" size={16} />
-                                <select
-                                    className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-10 py-3 text-sm text-slate-200 focus:border-blue-500/50 outline-none appearance-none"
-                                    value={selectedDriverId}
-                                    onChange={e => setSelectedDriverId(e.target.value)}
-                                >
-                                    <option value="">-- Unassigned --</option>
-                                    {drivers.map(d => <option key={d.uid} value={d.uid}>{d.name}</option>)}
-                                </select>
-                                <div className="absolute right-4 top-4 pointer-events-none text-slate-600">▼</div>
+                            <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
+                                {editingOrderId ? <FileText className="text-blue-400" /> : <Plus className="text-blue-400" />}
+                                {editingOrderId ? 'Edit Order' : 'Create New Order'}
+                            </h2>
+                            <p className="text-xs text-slate-500 mt-1">Manage order details and items.</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button onClick={handleCloseModal} className="p-2 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-white transition-all">
+                                <X size={20} />
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Modal Body */}
+                    <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-slate-950">
+
+                        {/* Section 1: Basic Info (Simpler) */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Assigned Driver</label>
+                                <div className="relative">
+                                    <UserIcon className="absolute left-3 top-3 text-slate-600" size={16} />
+                                    <select
+                                        className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-10 py-3 text-sm text-slate-200 focus:border-blue-500/50 outline-none appearance-none"
+                                        value={selectedDriverId}
+                                        onChange={e => setSelectedDriverId(e.target.value)}
+                                    >
+                                        <option value="">-- Unassigned --</option>
+                                        {drivers.map(d => <option key={d.uid} value={d.uid}>{d.name}</option>)}
+                                    </select>
+                                    <div className="absolute right-4 top-4 pointer-events-none text-slate-600">▼</div>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Delivery Date</label>
+                                <input
+                                    type="date"
+                                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-300 focus:border-blue-500/50 outline-none"
+                                    value={newOrderDeliveryDate}
+                                    onChange={e => setNewOrderDeliveryDate(e.target.value)}
+                                />
                             </div>
                         </div>
+
+                        {/* BATCH ORDER NOTE */}
                         <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Delivery Date</label>
-                            <input
-                                type="date"
-                                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-300 focus:border-blue-500/50 outline-none"
-                                value={newOrderDeliveryDate}
-                                onChange={e => setNewOrderDeliveryDate(e.target.value)}
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Order Notes (Batch Remark)</label>
+                            <textarea
+                                rows={2}
+                                placeholder="Enter general notes for this order..."
+                                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-300 focus:border-blue-500/50 outline-none placeholder:text-slate-600 resize-none"
+                                value={newOrderNotes}
+                                onChange={e => setNewOrderNotes(e.target.value)}
                             />
                         </div>
-                    </div>
 
-                    {/* BATCH ORDER NOTE */}
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Order Notes (Batch Remark)</label>
-                        <textarea
-                            rows={2}
-                            placeholder="Enter general notes for this order..."
-                            className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-300 focus:border-blue-500/50 outline-none placeholder:text-slate-600 resize-none"
-                            value={newOrderNotes}
-                            onChange={e => setNewOrderNotes(e.target.value)}
-                        />
-                    </div>
+                        <hr className="border-slate-800" />
 
-                    <hr className="border-slate-800" />
+                        {/* Section 2: Items */}
+                        <div>
+                            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                <Box size={16} /> Order Items
+                            </h3>
 
-                    {/* Section 2: Items */}
-                    <div>
-                        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                            <Box size={16} /> Order Items
-                        </h3>
-
-                        {/* Item List Layout */}
-                        <div className="bg-slate-900/80 rounded-2xl border border-slate-800 shadow-lg flex flex-col min-h-[400px]">
-                            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-                                <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase">
-                                    <Box size={14} /> Items List
-                                </div>
-                                <div className="text-xs font-bold text-slate-600 bg-slate-900 px-2 py-1 rounded">
-                                    {newOrderItems.length} Items
-                                </div>
-                            </div>
-
-                            {/* Items List (Inline Edit) */}
-                            <div className="flex-1 p-4 space-y-2 overflow-y-auto max-h-[400px]">
-                                {newOrderItems.length === 0 ? (
-                                    <div className="text-center py-12 text-slate-700 text-sm italic border-2 border-dashed border-slate-800/50 rounded-xl">
-                                        List empty. Add items below.
+                            {/* Item List Layout */}
+                            <div className="bg-slate-900/80 rounded-2xl border border-slate-800 shadow-lg flex flex-col min-h-[400px]">
+                                <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+                                    <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase">
+                                        <Box size={14} /> Items List
                                     </div>
-                                ) : (
-                                    newOrderItems.map((item, idx) => (
-                                        <div key={idx} className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex flex-col gap-2 group hover:border-slate-700 transition-colors">
-                                            <div className="flex justify-between items-start">
-                                                <div className="flex-1">
-                                                    <div className="font-bold text-white text-sm leading-tight">{item.product}</div>
-                                                    <div className="flex items-center gap-2 mt-1">
-                                                        <span className="text-[10px] text-slate-500 font-mono">{item.sku}</span>
-                                                        <span className="text-[10px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded uppercase font-bold border border-blue-500/20">
-                                                            {item.packaging || 'Unit'}
-                                                        </span>
+                                    <div className="text-xs font-bold text-slate-600 bg-slate-900 px-2 py-1 rounded">
+                                        {newOrderItems.length} Items
+                                    </div>
+                                </div>
+
+                                {/* Items List (Inline Edit) */}
+                                <div className="flex-1 p-4 space-y-2 overflow-y-auto max-h-[400px]">
+                                    {newOrderItems.length === 0 ? (
+                                        <div className="text-center py-12 text-slate-700 text-sm italic border-2 border-dashed border-slate-800/50 rounded-xl">
+                                            List empty. Add items below.
+                                        </div>
+                                    ) : (
+                                        newOrderItems.map((item, idx) => (
+                                            <div key={idx} className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex flex-col gap-2 group hover:border-slate-700 transition-colors">
+                                                <div className="flex justify-between items-start">
+                                                    <div className="flex-1">
+                                                        <div className="font-bold text-white text-sm leading-tight">{item.product}</div>
+                                                        <div className="flex items-center gap-2 mt-1">
+                                                            <span className="text-[10px] text-slate-500 font-mono">{item.sku}</span>
+                                                            <span className="text-[10px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded uppercase font-bold border border-blue-500/20">
+                                                                {item.packaging || 'Unit'}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-3">
+                                                        {/* INLINE QUANTITY EDIT */}
+                                                        <input
+                                                            type="number"
+                                                            className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-right font-bold text-orange-400 focus:border-orange-500 outline-none text-sm"
+                                                            value={item.quantity}
+                                                            onChange={(e) => {
+                                                                const val = Number(e.target.value);
+                                                                const updated = [...newOrderItems];
+                                                                updated[idx].quantity = val;
+                                                                setNewOrderItems(updated);
+                                                            }}
+                                                        />
+                                                        <button onClick={() => handleRemoveItem(idx)} className="text-slate-600 hover:text-red-500 p-1 rounded-full hover:bg-slate-900 transition-colors">
+                                                            <X size={16} />
+                                                        </button>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-3">
-                                                    {/* INLINE QUANTITY EDIT */}
+
+                                                {/* INLINE REMARK EDIT */}
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <div className="text-[10px] font-bold text-slate-600 uppercase">Remark:</div>
                                                     <input
-                                                        type="number"
-                                                        className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-right font-bold text-orange-400 focus:border-orange-500 outline-none text-sm"
-                                                        value={item.quantity}
+                                                        type="text"
+                                                        placeholder="Add remark..."
+                                                        className="flex-1 bg-transparent border-b border-slate-800 text-xs text-slate-400 focus:border-blue-500 outline-none py-0.5 placeholder:text-slate-700"
+                                                        value={item.remark || ''}
                                                         onChange={(e) => {
-                                                            const val = Number(e.target.value);
+                                                            const val = e.target.value;
                                                             const updated = [...newOrderItems];
-                                                            updated[idx].quantity = val;
+                                                            updated[idx].remark = val;
                                                             setNewOrderItems(updated);
                                                         }}
                                                     />
-                                                    <button onClick={() => handleRemoveItem(idx)} className="text-slate-600 hover:text-red-500 p-1 rounded-full hover:bg-slate-900 transition-colors">
-                                                        <X size={16} />
-                                                    </button>
                                                 </div>
                                             </div>
+                                        ))
+                                    )}
+                                </div>
 
-                                            {/* INLINE REMARK EDIT */}
-                                            <div className="flex items-center gap-2 mt-1">
-                                                <div className="text-[10px] font-bold text-slate-600 uppercase">Remark:</div>
-                                                <input
-                                                    type="text"
-                                                    placeholder="Add remark..."
-                                                    className="flex-1 bg-transparent border-b border-slate-800 text-xs text-slate-400 focus:border-blue-500 outline-none py-0.5 placeholder:text-slate-700"
-                                                    value={item.remark || ''}
-                                                    onChange={(e) => {
-                                                        const val = e.target.value;
-                                                        const updated = [...newOrderItems];
-                                                        updated[idx].remark = val;
-                                                        setNewOrderItems(updated);
-                                                    }}
-                                                />
-                                            </div>
+                                {/* Add Row (Footer) - Search Only */}
+                                <div className="bg-slate-800/50 p-4 border-t border-slate-700/50 flex flex-col gap-3 rounded-b-2xl">
+                                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Quick Add (Search SKU)</div>
+
+                                    <div className="flex flex-col gap-3">
+                                        <SearchableSelect
+                                            placeholder="Select Product..."
+                                            options={v2Items.map(item => ({
+                                                value: item.sku,
+                                                label: item.name,
+                                                subLabel: `${item.sku} • Stock: ${stockMap[item.sku] || 0}`,
+                                                statusColor: (stockMap[item.sku] || 0) < 100 ? 'text-red-400' : 'text-green-400',
+                                                statusLabel: (stockMap[item.sku] || 0) < 100 ? 'LOW' : 'OK'
+                                            }))}
+                                            value={selectedV2Item?.sku || ''}
+                                            onChange={(val) => {
+                                                const i = v2Items.find(x => x.sku === val);
+                                                setSelectedV2Item(i || null);
+                                                if (i) setItemSearchTerm(i.name);
+                                            }}
+                                            minimal
+                                        />
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                placeholder="Item Remark..."
+                                                className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-slate-300 outline-none focus:border-blue-500 text-sm placeholder:text-slate-600"
+                                                value={currentItemRemark}
+                                                onChange={e => setCurrentItemRemark(e.target.value)}
+                                            />
+                                            <input
+                                                type="number"
+                                                placeholder="Qty"
+                                                className="w-20 bg-slate-950 border border-slate-700 rounded-xl px-2 py-3 text-white text-right font-bold outline-none focus:border-orange-500 text-sm"
+                                                value={currentItemQty || ''}
+                                                onChange={e => setCurrentItemQty(Number(e.target.value))}
+                                            />
+                                            <button
+                                                onClick={handleAddItem}
+                                                disabled={!selectedV2Item || !currentItemQty}
+                                                className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white px-4 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2"
+                                            >
+                                                <Plus size={16} /> Add
+                                            </button>
                                         </div>
-                                    ))
-                                )}
-                            </div>
-
-                            {/* Add Row (Footer) - Search Only */}
-                            <div className="bg-slate-800/50 p-4 border-t border-slate-700/50 flex flex-col gap-3 rounded-b-2xl">
-                                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Quick Add (Search SKU)</div>
-
-                                <div className="flex flex-col gap-3">
-                                    <SearchableSelect
-                                        placeholder="Select Product..."
-                                        options={v2Items.map(item => ({
-                                            value: item.sku,
-                                            label: item.name,
-                                            subLabel: `${item.sku} • Stock: ${stockMap[item.sku] || 0}`,
-                                            statusColor: (stockMap[item.sku] || 0) < 100 ? 'text-red-400' : 'text-green-400',
-                                            statusLabel: (stockMap[item.sku] || 0) < 100 ? 'LOW' : 'OK'
-                                        }))}
-                                        value={selectedV2Item?.sku || ''}
-                                        onChange={(val) => {
-                                            const i = v2Items.find(x => x.sku === val);
-                                            setSelectedV2Item(i || null);
-                                            if (i) setItemSearchTerm(i.name);
-                                        }}
-                                        minimal
-                                    />
-                                    <div className="flex gap-2">
-                                        <input
-                                            type="text"
-                                            placeholder="Item Remark..."
-                                            className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-slate-300 outline-none focus:border-blue-500 text-sm placeholder:text-slate-600"
-                                            value={currentItemRemark}
-                                            onChange={e => setCurrentItemRemark(e.target.value)}
-                                        />
-                                        <input
-                                            type="number"
-                                            placeholder="Qty"
-                                            className="w-20 bg-slate-950 border border-slate-700 rounded-xl px-2 py-3 text-white text-right font-bold outline-none focus:border-orange-500 text-sm"
-                                            value={currentItemQty || ''}
-                                            onChange={e => setCurrentItemQty(Number(e.target.value))}
-                                        />
-                                        <button
-                                            onClick={handleAddItem}
-                                            disabled={!selectedV2Item || !currentItemQty}
-                                            className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white px-4 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2"
-                                        >
-                                            <Plus size={16} /> Add
-                                        </button>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                {/* Modal Footer */}
-                <div className="p-6 border-t border-slate-800 bg-slate-900/50 flex justify-end gap-3">
-                    <button onClick={handleCloseModal} className="px-6 py-2 rounded-xl text-slate-400 hover:text-white font-bold transition-colors">Cancel</button>
-                    <button
-                        onClick={handleSubmitOrder}
-                        className="px-8 py-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white rounded-xl font-bold shadow-lg shadow-blue-900/30 transition-all active:scale-95"
-                    >
-                        {editingOrderId ? 'Save Changes' : 'Confirm Order'}
-                    </button>
+                    {/* Modal Footer */}
+                    <div className="p-6 border-t border-slate-800 bg-slate-900/50 flex justify-end gap-3">
+                        <button onClick={handleCloseModal} className="px-6 py-2 rounded-xl text-slate-400 hover:text-white font-bold transition-colors">Cancel</button>
+                        <button
+                            onClick={handleSubmitOrder}
+                            className="px-8 py-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white rounded-xl font-bold shadow-lg shadow-blue-900/30 transition-all active:scale-95"
+                        >
+                            {editingOrderId ? 'Save Changes' : 'Confirm Order'}
+                        </button>
+                    </div>
                 </div>
             </div>
-        </div>
-    )
-}
+        )
+    }
 
-{/* --- QUICK STOCK OUT MODAL --- */ }
-{
-    isStockOutOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200 p-4">
-            <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto custom-scrollbar bg-slate-950 rounded-2xl border border-slate-800 shadow-2xl relative">
-                {/* Pass onClose to SimpleStock so it can render a back button or we handle it here. 
+    {/* --- QUICK STOCK OUT MODAL --- */ }
+    {
+        isStockOutOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200 p-4">
+                <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto custom-scrollbar bg-slate-950 rounded-2xl border border-slate-800 shadow-2xl relative">
+                    {/* Pass onClose to SimpleStock so it can render a back button or we handle it here. 
                              Actually SimpleStock logic I added handles the button rendering if onClose is present.
                          */}
-                <div className="p-4">
-                    <SimpleStock onClose={() => setIsStockOutOpen(false)} isModal={true} />
+                    <div className="p-4">
+                        <SimpleStock onClose={() => setIsStockOutOpen(false)} isModal={true} />
+                    </div>
                 </div>
             </div>
-        </div>
-    )
-}
+        )
+    }
         </div >
     );
 };
