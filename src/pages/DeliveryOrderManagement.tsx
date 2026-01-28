@@ -576,28 +576,26 @@ const DeliveryOrderManagement: React.FC = () => {
                     if (driverOrders.length === 0 && (searchTerm || statusFilter !== 'All')) return null;
 
                     return (
-                        <div key={driver.uid} className="bg-slate-900/40 backdrop-blur-md border border-slate-800/60 rounded-2xl flex flex-col overflow-hidden hover:border-blue-500/30 transition-all group">
+                        <div key={driver.uid} className="bg-[#121214] border border-[#27272a] rounded-2xl flex flex-col overflow-hidden shadow-2xl shadow-black/50 hover:border-slate-600 transition-colors">
                             {/* Card Header */}
-                            <div className="p-5 border-b border-slate-800/60 bg-gradient-to-r from-slate-900 to-transparent">
-                                <div className="flex items-center justify-between mb-2">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700 text-blue-400">
-                                            <UserIcon size={20} />
-                                        </div>
-                                        <div>
-                                            <h3 className="font-bold text-slate-200">{driver.name}</h3>
-                                            <p className="text-xs text-slate-500 font-mono">ID: {driver.uid.substring(0, 6)}</p>
-                                        </div>
+                            <div className="p-5 border-b border-[#27272a] bg-[#18181b] flex items-center justify-between group">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-900/40 text-white">
+                                        <UserIcon size={20} className="fill-white/20" />
                                     </div>
-                                    <div className="flex flex-col items-end">
-                                        <div className="text-2xl font-black text-slate-100">{driverOrders.length}</div>
-                                        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Active DOs</div>
+                                    <div>
+                                        <h3 className="font-bold text-white text-lg leading-tight">{driver.name}</h3>
+                                        <p className="text-[11px] text-zinc-500 font-mono uppercase tracking-wider">ID: {driver.uid.substring(0, 6)}</p>
                                     </div>
+                                </div>
+                                <div className="flex flex-col items-end">
+                                    <div className="text-2xl font-black text-white">{driverOrders.length}</div>
+                                    <div className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest">Orders</div>
                                 </div>
                             </div>
 
                             {/* Orders List */}
-                            <div className="flex-1 p-3 space-y-3 max-h-[500px] overflow-y-auto custom-scrollbar">
+                            <div className="flex-1 p-3 space-y-3 max-h-[600px] overflow-y-auto custom-scrollbar bg-[#09090b]">
                                 {driverOrders.map(order => (
                                     <div
                                         key={order.id}
@@ -610,58 +608,70 @@ const DeliveryOrderManagement: React.FC = () => {
                                             setNewOrderItems(order.items || []);
                                             setIsCreateModalOpen(true);
                                         }}
-                                        className="bg-slate-950/50 border border-slate-800 p-4 rounded-xl hover:bg-blue-900/10 hover:border-blue-500/30 cursor-pointer transition-all relative group/card"
+                                        className="bg-[#18181b] border border-[#27272a] p-4 rounded-xl hover:bg-[#27272a] hover:border-blue-500/50 cursor-pointer transition-all relative group/card shadow-sm"
                                     >
-                                        <div className="flex justify-between items-start mb-2">
-                                            <div className="font-mono text-xs text-blue-400 bg-blue-500/10 px-2 py-1 rounded border border-blue-500/10">
+                                        <div className="flex justify-between items-start mb-3">
+                                            <div className="font-mono text-[10px] font-bold text-blue-400 bg-blue-500/10 px-2 py-1 rounded border border-blue-500/10">
                                                 {order.orderNumber}
                                             </div>
-                                            <div className={`text-[10px] font-bold px-2 py-0.5 rounded border ${order.status === 'New' ? 'text-amber-400 border-amber-500/20 bg-amber-500/10' :
-                                                order.status === 'Delivered' ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' :
-                                                    'text-slate-400 border-slate-700 bg-slate-800'
+                                            <div className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider border ${order.status === 'New' ? 'text-amber-400 border-amber-500/20 bg-amber-500/10' :
+                                                    order.status === 'Delivered' ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' :
+                                                        order.status === 'Pending Approval' ? 'text-red-400 border-red-500/20 bg-red-500/10 animate-pulse' :
+                                                            'text-slate-400 border-slate-700 bg-slate-800'
                                                 }`}>
                                                 {order.status}
                                             </div>
                                         </div>
-                                        <h4 className="font-bold text-slate-200 text-sm mb-1 truncate">{order.customer}</h4>
-                                        <div className="text-xs text-slate-500 flex items-center gap-2 mb-3">
-                                            <Calendar size={12} /> {order.deadline || 'No Deadline'}
+
+                                        <h4 className="font-bold text-slate-100 text-sm mb-1 leading-snug">{order.customer || 'Unknown Customer'}</h4>
+                                        <div className="text-xs text-slate-500 flex items-center gap-2 mb-4 line-clamp-1">
+                                            <Calendar size={12} className="text-slate-600" />
+                                            <span className={!order.deadline ? 'opacity-50' : ''}>{order.deadline || 'No Date'}</span>
                                             {order.zone && <span className="text-slate-600">• {order.zone}</span>}
                                         </div>
 
                                         {/* Items Preview */}
-                                        <div className="space-y-1">
-                                            {order.items?.slice(0, 3).map((item, i) => (
-                                                <div key={i} className="text-[11px] text-slate-400 flex items-center gap-1 truncate">
-                                                    <Box size={10} className="text-slate-600" />
-                                                    <span className="text-slate-300 font-bold">{item.quantity}x</span> {item.product}
-                                                </div>
-                                            ))}
+                                        <div className="space-y-1.5 bg-[#121214] p-3 rounded-lg border border-[#27272a]">
+                                            {order.items?.length === 0 ? (
+                                                <div className="text-[10px] text-slate-600 italic text-center py-1">No Items</div>
+                                            ) : (
+                                                order.items?.slice(0, 3).map((item, i) => (
+                                                    <div key={i} className="text-[11px] flex justify-between items-center gap-2">
+                                                        <div className="flex items-center gap-2 overflow-hidden">
+                                                            <div className="w-1 h-1 rounded-full bg-slate-600 shrink-0"></div>
+                                                            <span className="text-slate-400 truncate">{item.product}</span>
+                                                        </div>
+                                                        <span className="text-slate-200 font-bold font-mono whitespace-nowrap">x{item.quantity}</span>
+                                                    </div>
+                                                ))
+                                            )}
                                             {order.items && order.items.length > 3 && (
-                                                <div className="text-[10px] text-slate-600 italic">+ {order.items.length - 3} more items</div>
+                                                <div className="text-[9px] text-slate-500 text-center pt-1 border-t border-slate-800/50 mt-1">
+                                                    + {order.items.length - 3} more items
+                                                </div>
                                             )}
                                         </div>
 
                                         {/* APPROVE BUTTON FOR VIVIAN */}
                                         {order.status === 'Pending Approval' && (
-                                            <div className="mt-3 pt-3 border-t border-slate-800">
+                                            <div className="mt-4">
                                                 <button
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         handleApproveAmendment(order);
                                                     }}
-                                                    className="w-full py-2 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white rounded-lg font-bold text-xs uppercase flex items-center justify-center gap-2 shadow-lg shadow-red-900/30"
+                                                    className="w-full py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-lg font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-red-900/30 transition-all active:scale-95"
                                                 >
-                                                    <Zap size={14} /> Review & Approve Amend
+                                                    <Zap size={14} className="fill-white" /> Approve & Deduct Stock
                                                 </button>
                                             </div>
                                         )}
                                     </div>
                                 ))}
                                 {driverOrders.length === 0 && (
-                                    <div className="h-32 flex flex-col items-center justify-center text-slate-700">
-                                        <Box size={32} className="mb-2 opacity-50" />
-                                        <span className="text-xs font-medium">No active orders</span>
+                                    <div className="h-40 flex flex-col items-center justify-center text-slate-700 opacity-50">
+                                        <Truck size={40} className="mb-3" />
+                                        <span className="text-xs font-bold uppercase tracking-wider">No Active Orders</span>
                                     </div>
                                 )}
                             </div>
