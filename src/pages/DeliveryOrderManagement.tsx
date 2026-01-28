@@ -155,6 +155,7 @@ const DeliveryOrderManagement: React.FC = () => {
     const [newOrderItems, setNewOrderItems] = useState<SalesOrder['items']>([]);
     const [orderCustomer, setOrderCustomer] = useState('');
     const [newOrderAddress, setNewOrderAddress] = useState('');
+    const [newOrderNotes, setNewOrderNotes] = useState(''); // Batch Note
 
     // AI Autocomplete State
     const [customerDB, setCustomerDB] = useState<any[]>([]);
@@ -209,7 +210,7 @@ const DeliveryOrderManagement: React.FC = () => {
                     status: o.status,
                     orderDate: o.order_date,
                     deadline: o.deadline,
-                    notes: o.notes,
+                    notes: o.notes, // Map notes
                     zone: o.zone,
                     deliveryAddress: o.delivery_address
                 }));
@@ -367,7 +368,8 @@ const DeliveryOrderManagement: React.FC = () => {
                 items: newOrderItems,
                 status: 'New',
                 order_date: new Date().toISOString().split('T')[0],
-                deadline: newOrderDeliveryDate || null
+                deadline: newOrderDeliveryDate || null,
+                notes: newOrderNotes // Include Batch Notes
             };
 
             if (editingOrderId) {
@@ -405,6 +407,7 @@ const DeliveryOrderManagement: React.FC = () => {
         setNewOrderAddress('');
         setNewOrderDeliveryDate('');
         setNewOrderItems([]);
+        setNewOrderNotes(''); // Reset Notes
     };
 
     function getDriverName(driverId?: string) {
@@ -555,6 +558,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                             setOrderCustomer(order.customer);
                                             setNewOrderAddress(order.deliveryAddress || '');
                                             setNewOrderDeliveryDate(order.deadline || '');
+                                            setNewOrderNotes(order.notes || ''); // Load Notes
                                             setNewOrderItems(order.items || []);
                                             setIsCreateModalOpen(true);
                                         }}
@@ -681,6 +685,18 @@ const DeliveryOrderManagement: React.FC = () => {
                                 </div>
                             </div>
 
+                            {/* BATCH ORDER NOTE */}
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Order Notes (Batch Remark)</label>
+                                <textarea
+                                    rows={2}
+                                    placeholder="Enter general notes for this order..."
+                                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-300 focus:border-blue-500/50 outline-none placeholder:text-slate-600 resize-none"
+                                    value={newOrderNotes}
+                                    onChange={e => setNewOrderNotes(e.target.value)}
+                                />
+                            </div>
+
                             <hr className="border-slate-800" />
 
                             {/* Section 2: Items */}
@@ -708,32 +724,51 @@ const DeliveryOrderManagement: React.FC = () => {
                                             </div>
                                         ) : (
                                             newOrderItems.map((item, idx) => (
-                                                <div key={idx} className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex justify-between items-center group hover:border-slate-700 transition-colors">
-                                                    <div className="flex-1">
-                                                        <div className="font-bold text-white text-sm">{item.product}</div>
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="text-[10px] text-slate-500 font-mono">{item.sku}</span>
-                                                            <span className="text-[10px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded uppercase font-bold border border-blue-500/20">
-                                                                {item.packaging || 'Unit'}
-                                                            </span>
+                                                <div key={idx} className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex flex-col gap-2 group hover:border-slate-700 transition-colors">
+                                                    <div className="flex justify-between items-start">
+                                                        <div className="flex-1">
+                                                            <div className="font-bold text-white text-sm leading-tight">{item.product}</div>
+                                                            <div className="flex items-center gap-2 mt-1">
+                                                                <span className="text-[10px] text-slate-500 font-mono">{item.sku}</span>
+                                                                <span className="text-[10px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded uppercase font-bold border border-blue-500/20">
+                                                                    {item.packaging || 'Unit'}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-3">
+                                                            {/* INLINE QUANTITY EDIT */}
+                                                            <input
+                                                                type="number"
+                                                                className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-right font-bold text-orange-400 focus:border-orange-500 outline-none text-sm"
+                                                                value={item.quantity}
+                                                                onChange={(e) => {
+                                                                    const val = Number(e.target.value);
+                                                                    const updated = [...newOrderItems];
+                                                                    updated[idx].quantity = val;
+                                                                    setNewOrderItems(updated);
+                                                                }}
+                                                            />
+                                                            <button onClick={() => handleRemoveItem(idx)} className="text-slate-600 hover:text-red-500 p-1 rounded-full hover:bg-slate-900 transition-colors">
+                                                                <X size={16} />
+                                                            </button>
                                                         </div>
                                                     </div>
-                                                    <div className="flex items-center gap-3">
-                                                        {/* INLINE QUANTITY EDIT */}
+
+                                                    {/* INLINE REMARK EDIT */}
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <div className="text-[10px] font-bold text-slate-600 uppercase">Remark:</div>
                                                         <input
-                                                            type="number"
-                                                            className="w-20 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-right font-bold text-orange-400 focus:border-orange-500 outline-none text-sm"
-                                                            value={item.quantity}
+                                                            type="text"
+                                                            placeholder="Add remark..."
+                                                            className="flex-1 bg-transparent border-b border-slate-800 text-xs text-slate-400 focus:border-blue-500 outline-none py-0.5 placeholder:text-slate-700"
+                                                            value={item.remark || ''}
                                                             onChange={(e) => {
-                                                                const val = Number(e.target.value);
+                                                                const val = e.target.value;
                                                                 const updated = [...newOrderItems];
-                                                                updated[idx].quantity = val;
+                                                                updated[idx].remark = val;
                                                                 setNewOrderItems(updated);
                                                             }}
                                                         />
-                                                        <button onClick={() => handleRemoveItem(idx)} className="text-slate-600 hover:text-red-500 p-1 rounded-full hover:bg-slate-900 transition-colors">
-                                                            <X size={16} />
-                                                        </button>
                                                     </div>
                                                 </div>
                                             ))
@@ -764,18 +799,25 @@ const DeliveryOrderManagement: React.FC = () => {
                                             />
                                             <div className="flex gap-2">
                                                 <input
+                                                    type="text"
+                                                    placeholder="Item Remark..."
+                                                    className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-slate-300 outline-none focus:border-blue-500 text-sm placeholder:text-slate-600"
+                                                    value={currentItemRemark}
+                                                    onChange={e => setCurrentItemRemark(e.target.value)}
+                                                />
+                                                <input
                                                     type="number"
                                                     placeholder="Qty"
-                                                    className="w-24 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white text-right font-bold outline-none focus:border-orange-500 text-sm"
+                                                    className="w-20 bg-slate-950 border border-slate-700 rounded-xl px-2 py-3 text-white text-right font-bold outline-none focus:border-orange-500 text-sm"
                                                     value={currentItemQty || ''}
                                                     onChange={e => setCurrentItemQty(Number(e.target.value))}
                                                 />
                                                 <button
                                                     onClick={handleAddItem}
                                                     disabled={!selectedV2Item || !currentItemQty}
-                                                    className="flex-1 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2"
+                                                    className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white px-4 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2"
                                                 >
-                                                    <Plus size={16} /> Add Item
+                                                    <Plus size={16} /> Add
                                                 </button>
                                             </div>
                                         </div>
