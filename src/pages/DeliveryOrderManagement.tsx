@@ -11,6 +11,8 @@ import {
     User
 } from '../types';
 import { V2Item } from '../types/v2';
+import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
+
 
 import SimpleStock from './SimpleStock';
 
