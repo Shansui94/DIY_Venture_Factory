@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
+import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd'; // re-trigger build
 import { supabase } from '../services/supabase';
 import { getV2Items } from '../services/apiV2';
 import { determineZone, findBestFactory } from '../utils/logistics';
