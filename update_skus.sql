@@ -1,0 +1,95 @@
+
+-- 1. DELETE EOO SKUs
+DELETE FROM master_items_v2 WHERE sku IN (
+    'eoo-b17','eoo-b20','eoo-b25','eoo-b28','eoo-b32','eoo-b35','eoo-b38','eoo-b40','eoo-b45','eoo-b50','eoo-b60',
+    'eoo-w17','eoo-w20','eoo-w25','eoo-w28','eoo-w32','eoo-w35','eoo-w38','eoo-w40','eoo-w45','eoo-w50','eoo-w60'
+);
+
+-- 2. INSERT NEW ROLL SKUs
+INSERT INTO master_items_v2 (sku, name, type, category, supply_type, uom, status)
+VALUES
+('B17-ROLL', 'B17-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('B20-ROLL', 'B20-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('B25-ROLL', 'B25-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('B28-ROLL', 'B28-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('B32-ROLL', 'B32-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('B35-ROLL', 'B35-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('B38-ROLL', 'B38-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('B40-ROLL', 'B40-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('B45-ROLL', 'B45-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('B50-ROLL', 'B50-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('B60-ROLL', 'B60-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+
+('W17-ROLL', 'W17-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('W20-ROLL', 'W20-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('W25-ROLL', 'W25-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('W28-ROLL', 'W28-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('W32-ROLL', 'W32-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('W35-ROLL', 'W35-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('W38-ROLL', 'W38-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('W40-ROLL', 'W40-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('W45-ROLL', 'W45-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('W50-ROLL', 'W50-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('W60-ROLL', 'W60-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+
+('YEL-17-ROLL', 'YEL-17-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('YEL-20-ROLL', 'YEL-20-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('YEL-25-ROLL', 'YEL-25-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('YEL-28-ROLL', 'YEL-28-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('YEL-32-ROLL', 'YEL-32-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('YEL-35-ROLL', 'YEL-35-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('YEL-38-ROLL', 'YEL-38-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('YEL-40-ROLL', 'YEL-40-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('YEL-45-ROLL', 'YEL-45-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('YEL-50-ROLL', 'YEL-50-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('YEL-60-ROLL', 'YEL-60-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+
+('PUR-17-ROLL', 'PUR-17-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('PUR-20-ROLL', 'PUR-20-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('PUR-25-ROLL', 'PUR-25-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('PUR-28-ROLL', 'PUR-28-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('PUR-32-ROLL', 'PUR-32-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('PUR-35-ROLL', 'PUR-35-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('PUR-38-ROLL', 'PUR-38-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('PUR-40-ROLL', 'PUR-40-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('PUR-45-ROLL', 'PUR-45-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('PUR-50-ROLL', 'PUR-50-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('PUR-60-ROLL', 'PUR-60-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+
+('PINK-17-ROLL', 'PINK-17-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('PINK-20-ROLL', 'PINK-20-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('PINK-25-ROLL', 'PINK-25-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('PINK-28-ROLL', 'PINK-28-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('PINK-32-ROLL', 'PINK-32-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('PINK-35-ROLL', 'PINK-35-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('PINK-38-ROLL', 'PINK-38-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('PINK-40-ROLL', 'PINK-40-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('PINK-45-ROLL', 'PINK-45-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('PINK-50-ROLL', 'PINK-50-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('PINK-60-ROLL', 'PINK-60-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+
+('DARKGREEN-17-ROLL', 'DARKGREEN-17-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('DARKGREEN-20-ROLL', 'DARKGREEN-20-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('DARKGREEN-25-ROLL', 'DARKGREEN-25-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('DARKGREEN-28-ROLL', 'DARKGREEN-28-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('DARKGREEN-32-ROLL', 'DARKGREEN-32-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('DARKGREEN-35-ROLL', 'DARKGREEN-35-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('DARKGREEN-38-ROLL', 'DARKGREEN-38-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('DARKGREEN-40-ROLL', 'DARKGREEN-40-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('DARKGREEN-45-ROLL', 'DARKGREEN-45-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('DARKGREEN-50-ROLL', 'DARKGREEN-50-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('DARKGREEN-60-ROLL', 'DARKGREEN-60-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+
+('MINT-17-ROLL', 'MINT-17-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('MINT-20-ROLL', 'MINT-20-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('MINT-25-ROLL', 'MINT-25-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('MINT-28-ROLL', 'MINT-28-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('MINT-32-ROLL', 'MINT-32-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('MINT-35-ROLL', 'MINT-35-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('MINT-38-ROLL', 'MINT-38-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('MINT-40-ROLL', 'MINT-40-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('MINT-45-ROLL', 'MINT-45-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('MINT-50-ROLL', 'MINT-50-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active'),
+('MINT-60-ROLL', 'MINT-60-ROLL', 'FG', 'Packaging', 'Manufactured', 'Roll', 'Active')
+
+ON CONFLICT (sku) DO NOTHING;

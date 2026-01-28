@@ -395,10 +395,13 @@ const DeliveryOrderManagement: React.FC = () => {
     };
 
     const handleSubmitOrder = async () => {
-        if (!orderCustomer.trim()) return alert("Enter Customer Name");
+        // if (!orderCustomer.trim()) return alert("Enter Customer Name");  <-- Removed validation
         if (newOrderItems.length === 0) return alert("Add at least one item");
 
         try {
+            // Assign default customer if empty (since input is hidden)
+            const finalCustomer = orderCustomer.trim() || "General Customer";
+
             let doNumber;
             if (editingOrderId) {
                 // Keep existing DO Number
@@ -415,7 +418,7 @@ const DeliveryOrderManagement: React.FC = () => {
 
             const payload: any = {
                 order_number: doNumber,
-                customer: orderCustomer,
+                customer: finalCustomer,
                 delivery_address: newOrderAddress,
                 zone: zone,
                 factory_id: bestFactory.id,
@@ -679,7 +682,7 @@ const DeliveryOrderManagement: React.FC = () => {
             {/* --- CREATE / EDIT MODAL --- */}
             {isCreateModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-slate-950 border border-slate-800 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl shadow-black">
+                    <div className="bg-slate-950 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl shadow-black">
                         {/* Modal Header */}
                         <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
                             <div>
@@ -687,21 +690,9 @@ const DeliveryOrderManagement: React.FC = () => {
                                     {editingOrderId ? <FileText className="text-blue-400" /> : <Plus className="text-blue-400" />}
                                     {editingOrderId ? 'Edit Order' : 'Create New Order'}
                                 </h2>
-                                <p className="text-xs text-slate-500 mt-1">Fill in details manually or use AI Import.</p>
+                                <p className="text-xs text-slate-500 mt-1">Manage order details and items.</p>
                             </div>
                             <div className="flex items-center gap-2">
-                                {/* AI IMPORT BUTTON */}
-                                <label className="relative cursor-pointer group">
-                                    <input type="file" className="hidden" accept="image/*" onChange={handleAIFileUpload} disabled={isAnalyzing} />
-                                    <div className={`px-4 py-2 rounded-lg border border-purple-500/30 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20 transition-all flex items-center gap-2 font-bold text-sm ${isAnalyzing ? 'animate-pulse cursor-wait' : ''}`}>
-                                        <Sparkles size={16} className={isAnalyzing ? 'animate-spin' : ''} />
-                                        {isAnalyzing ? 'Analyzing...' : 'AI Auto-Fill'}
-                                    </div>
-                                    <div className="absolute top-full right-0 mt-2 w-48 p-2 bg-slate-900 border border-slate-700 rounded-lg text-[10px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
-                                        Upload a DO/Invoice image to auto-fill customer info.
-                                    </div>
-                                </label>
-
                                 <button onClick={handleCloseModal} className="p-2 hover:bg-slate-800 rounded-lg text-slate-500 hover:text-white transition-all">
                                     <X size={20} />
                                 </button>
@@ -709,71 +700,33 @@ const DeliveryOrderManagement: React.FC = () => {
                         </div>
 
                         {/* Modal Body */}
-                        <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar bg-slate-950">
+                        <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-slate-950">
 
-                            {/* Section 1: Customer & Delivery */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="space-y-4">
+                            {/* Section 1: Basic Info (Simpler) */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Assigned Driver</label>
                                     <div className="relative">
-                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Customer Name</label>
-                                        <div className="relative">
-                                            <Search className="absolute left-3 top-3 text-slate-600" size={16} />
-                                            <input
-                                                type="text"
-                                                className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-3 text-sm text-slate-200 focus:border-blue-500/50 outline-none font-bold"
-                                                placeholder="Search or type new customer..."
-                                                value={orderCustomer}
-                                                onChange={e => handleCustomerSearch(e.target.value)}
-                                                onFocus={() => orderCustomer && setShowSuggestions(true)}
-                                            />
-                                            {showSuggestions && filteredCustomers.length > 0 && (
-                                                <div className="absolute top-full left-0 right-0 mt-2 bg-slate-900 border border-slate-700 rounded-xl shadow-xl z-50 overflow-hidden">
-                                                    {filteredCustomers.map(c => (
-                                                        <div key={c.id} onClick={() => handleSelectCustomer(c)} className="px-4 py-3 hover:bg-blue-600/10 hover:text-blue-400 cursor-pointer text-sm border-b border-slate-800 last:border-0 transition-colors">
-                                                            <div className="font-bold">{c.name}</div>
-                                                            <div className="text-xs text-slate-500 truncate">{c.address}</div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Delivery Address</label>
-                                        <textarea
-                                            className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-300 focus:border-blue-500/50 outline-none min-h-[80px]"
-                                            placeholder="Full address..."
-                                            value={newOrderAddress}
-                                            onChange={e => setNewOrderAddress(e.target.value)}
-                                        />
+                                        <UserIcon className="absolute left-3 top-3 text-slate-600" size={16} />
+                                        <select
+                                            className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-10 py-3 text-sm text-slate-200 focus:border-blue-500/50 outline-none appearance-none"
+                                            value={selectedDriverId}
+                                            onChange={e => setSelectedDriverId(e.target.value)}
+                                        >
+                                            <option value="">-- Unassigned --</option>
+                                            {drivers.map(d => <option key={d.uid} value={d.uid}>{d.name}</option>)}
+                                        </select>
+                                        <div className="absolute right-4 top-4 pointer-events-none text-slate-600">▼</div>
                                     </div>
                                 </div>
-
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Assigned Driver</label>
-                                        <div className="relative">
-                                            <UserIcon className="absolute left-3 top-3 text-slate-600" size={16} />
-                                            <select
-                                                className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-10 py-3 text-sm text-slate-200 focus:border-blue-500/50 outline-none appearance-none"
-                                                value={selectedDriverId}
-                                                onChange={e => setSelectedDriverId(e.target.value)}
-                                            >
-                                                <option value="">-- Unassigned --</option>
-                                                {drivers.map(d => <option key={d.uid} value={d.uid}>{d.name}</option>)}
-                                            </select>
-                                            <div className="absolute right-4 top-4 pointer-events-none text-slate-600">▼</div>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Deadline</label>
-                                        <input
-                                            type="date"
-                                            className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-300 focus:border-blue-500/50 outline-none"
-                                            value={newOrderDeliveryDate}
-                                            onChange={e => setNewOrderDeliveryDate(e.target.value)}
-                                        />
-                                    </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Delivery Date</label>
+                                    <input
+                                        type="date"
+                                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-300 focus:border-blue-500/50 outline-none"
+                                        value={newOrderDeliveryDate}
+                                        onChange={e => setNewOrderDeliveryDate(e.target.value)}
+                                    />
                                 </div>
                             </div>
 
@@ -785,7 +738,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                     <Box size={16} /> Order Items
                                 </h3>
 
-                                {/* Use SimpleStock Style for Layout */}
+                                {/* Item List Layout */}
                                 <div className="bg-slate-900/80 rounded-2xl border border-slate-800 shadow-lg flex flex-col min-h-[400px]">
                                     <div className="p-4 border-b border-slate-800 flex items-center justify-between">
                                         <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase">
@@ -796,7 +749,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                         </div>
                                     </div>
 
-                                    {/* Existing Items List (SimpleStock Card Style) */}
+                                    {/* Items List (Inline Edit) */}
                                     <div className="flex-1 p-4 space-y-2 overflow-y-auto max-h-[400px]">
                                         {newOrderItems.length === 0 ? (
                                             <div className="text-center py-12 text-slate-700 text-sm italic border-2 border-dashed border-slate-800/50 rounded-xl">
@@ -815,9 +768,18 @@ const DeliveryOrderManagement: React.FC = () => {
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center gap-3">
-                                                        <div className="text-sm font-bold text-orange-400 bg-slate-900 px-2 py-1 rounded">
-                                                            x {item.quantity}
-                                                        </div>
+                                                        {/* INLINE QUANTITY EDIT */}
+                                                        <input
+                                                            type="number"
+                                                            className="w-20 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-right font-bold text-orange-400 focus:border-orange-500 outline-none text-sm"
+                                                            value={item.quantity}
+                                                            onChange={(e) => {
+                                                                const val = Number(e.target.value);
+                                                                const updated = [...newOrderItems];
+                                                                updated[idx].quantity = val;
+                                                                setNewOrderItems(updated);
+                                                            }}
+                                                        />
                                                         <button onClick={() => handleRemoveItem(idx)} className="text-slate-600 hover:text-red-500 p-1 rounded-full hover:bg-slate-900 transition-colors">
                                                             <X size={16} />
                                                         </button>
@@ -827,81 +789,45 @@ const DeliveryOrderManagement: React.FC = () => {
                                         )}
                                     </div>
 
-                                    {/* Add Row (Footer) */}
+                                    {/* Add Row (Footer) - Search Only */}
                                     <div className="bg-slate-800/50 p-4 border-t border-slate-700/50 flex flex-col gap-3 rounded-b-2xl">
-                                        <div className="flex justify-between items-center">
-                                            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Quick Add</div>
-                                            {/* Mode Switcher if needed, kept hidden for now or use simplified */}
+                                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Quick Add (Search SKU)</div>
+
+                                        <div className="flex flex-col gap-3">
+                                            <SearchableSelect
+                                                placeholder="Select Product..."
+                                                options={v2Items.map(item => ({
+                                                    value: item.sku,
+                                                    label: item.name,
+                                                    subLabel: `${item.sku} • Stock: ${stockMap[item.sku] || 0}`,
+                                                    statusColor: (stockMap[item.sku] || 0) < 100 ? 'text-red-400' : 'text-green-400',
+                                                    statusLabel: (stockMap[item.sku] || 0) < 100 ? 'LOW' : 'OK'
+                                                }))}
+                                                value={selectedV2Item?.sku || ''}
+                                                onChange={(val) => {
+                                                    const i = v2Items.find(x => x.sku === val);
+                                                    setSelectedV2Item(i || null);
+                                                    if (i) setItemSearchTerm(i.name);
+                                                }}
+                                                minimal
+                                            />
                                             <div className="flex gap-2">
-                                                <button onClick={() => setEntryMode('search')} className={`text-[10px] uppercase font-bold px-2 py-1 rounded ${entryMode === 'search' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>Search</button>
-                                                <button onClick={() => setEntryMode('manual')} className={`text-[10px] uppercase font-bold px-2 py-1 rounded ${entryMode === 'manual' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>Manual</button>
+                                                <input
+                                                    type="number"
+                                                    placeholder="Qty"
+                                                    className="w-24 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white text-right font-bold outline-none focus:border-orange-500 text-sm"
+                                                    value={currentItemQty || ''}
+                                                    onChange={e => setCurrentItemQty(Number(e.target.value))}
+                                                />
+                                                <button
+                                                    onClick={handleAddItem}
+                                                    disabled={!selectedV2Item || !currentItemQty}
+                                                    className="flex-1 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2"
+                                                >
+                                                    <Plus size={16} /> Add Item
+                                                </button>
                                             </div>
                                         </div>
-
-                                        {entryMode === 'search' ? (
-                                            <div className="flex flex-col gap-3">
-                                                <SearchableSelect
-                                                    placeholder="Select Product..."
-                                                    options={v2Items.map(item => ({
-                                                        value: item.sku,
-                                                        label: item.name,
-                                                        subLabel: `${item.sku} • Stock: ${stockMap[item.sku] || 0}`,
-                                                        statusColor: (stockMap[item.sku] || 0) < 100 ? 'text-red-400' : 'text-green-400',
-                                                        statusLabel: (stockMap[item.sku] || 0) < 100 ? 'LOW' : 'OK'
-                                                    }))}
-                                                    value={selectedV2Item?.sku || ''}
-                                                    onChange={(val) => {
-                                                        const i = v2Items.find(x => x.sku === val);
-                                                        setSelectedV2Item(i || null);
-                                                        if (i) setItemSearchTerm(i.name);
-                                                    }}
-                                                    minimal
-                                                />
-                                                <div className="flex gap-2">
-                                                    <input
-                                                        type="number"
-                                                        placeholder="Qty"
-                                                        className="w-24 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white text-right font-bold outline-none focus:border-orange-500 text-sm"
-                                                        value={currentItemQty || ''}
-                                                        onChange={e => setCurrentItemQty(Number(e.target.value))}
-                                                    />
-                                                    <button
-                                                        onClick={handleAddItem}
-                                                        disabled={!selectedV2Item || !currentItemQty}
-                                                        className="flex-1 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2"
-                                                    >
-                                                        <Plus size={16} /> Add Item
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            // Manual Fallback
-                                            <div className="space-y-2">
-                                                <div className="grid grid-cols-2 gap-2">
-                                                    <select value={currentItemLayer} onChange={e => setCurrentItemLayer(e.target.value as any)} className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-2 text-xs text-white outline-none">
-                                                        {PRODUCT_LAYERS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
-                                                    </select>
-                                                    <select value={currentItemMaterial} onChange={e => setCurrentItemMaterial(e.target.value as any)} className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-2 text-xs text-white outline-none">
-                                                        {PRODUCT_MATERIALS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
-                                                    </select>
-                                                </div>
-                                                <div className="flex gap-2">
-                                                    <input
-                                                        type="number"
-                                                        placeholder="Qty"
-                                                        className="w-24 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white text-right font-bold outline-none focus:border-orange-500 text-sm"
-                                                        value={currentItemQty || ''}
-                                                        onChange={e => setCurrentItemQty(Number(e.target.value))}
-                                                    />
-                                                    <button
-                                                        onClick={handleAddItem}
-                                                        className="flex-1 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2"
-                                                    >
-                                                        <Plus size={16} /> Add (Manual)
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        )}
                                     </div>
                                 </div>
                             </div>
