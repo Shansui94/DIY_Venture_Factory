@@ -24,6 +24,125 @@ import {
 } from '../data/constants';
 import SimpleStock from './SimpleStock';
 
+// Reusable Searchable Select Component (Ported from SimpleStock for consistency)
+interface SearchableSelectProps {
+    label?: string;
+    icon?: React.ReactNode;
+    options: { value: string; label: string; subLabel?: string; statusLabel?: string; statusColor?: string }[];
+    value: string;
+    onChange: (val: string) => void;
+    placeholder?: string;
+    minimal?: boolean; // For cleaner look
+}
+
+const SearchableSelect: React.FC<SearchableSelectProps> = ({ label, icon, options, value, onChange, placeholder = "Search...", minimal = false }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [search, setSearch] = useState('');
+
+    // Derived state for display
+    const selectedOption = options.find(o => o.value === value);
+
+    return (
+        <div className="relative w-full">
+            {label && (
+                <label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase mb-1">
+                    {icon} {label}
+                </label>
+            )}
+
+            {/* Input / Trigger */}
+            <div
+                className={`w-full bg-slate-950 border border-slate-800 rounded-xl flex items-center gap-3 cursor-pointer hover:border-slate-700 transition-colors ${minimal ? 'p-3' : 'px-4 py-4'}`}
+                onClick={() => setIsOpen(!isOpen)}
+            >
+                <Search size={16} className="text-slate-500" />
+
+                {selectedOption ? (
+                    <div className="flex-1">
+                        <div className={`font-bold text-white ${minimal ? 'text-sm' : ''}`}>{selectedOption.label}</div>
+                        {selectedOption.subLabel && !minimal && (
+                            <div className="text-xs text-slate-500 font-mono">{selectedOption.subLabel}</div>
+                        )}
+                    </div>
+                ) : (
+                    <input
+                        type="text"
+                        placeholder={placeholder}
+                        className="bg-transparent border-none outline-none text-white placeholder:text-slate-600 w-full"
+                        value={search}
+                        onChange={(e) => {
+                            setSearch(e.target.value);
+                            setIsOpen(true);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    />
+                )}
+
+                {selectedOption ? (
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onChange('');
+                            setSearch('');
+                        }}
+                        className="p-1 hover:bg-slate-800 rounded-full text-slate-500"
+                    >
+                        <X size={16} />
+                    </button>
+                ) : null}
+            </div>
+
+            {/* Dropdown */}
+            {isOpen && (
+                <>
+                    <div
+                        className="fixed inset-0 z-40"
+                        onClick={() => setIsOpen(false)}
+                    />
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-[#1a1a1e] border border-slate-800 rounded-xl shadow-2xl max-h-60 overflow-y-auto z-50 divide-y divide-slate-800/50">
+                        {options
+                            .filter(opt =>
+                                !search ||
+                                opt.label.toLowerCase().includes(search.toLowerCase()) ||
+                                (opt.subLabel && opt.subLabel.toLowerCase().includes(search.toLowerCase()))
+                            )
+                            .map(opt => (
+                                <div
+                                    key={opt.value}
+                                    onClick={() => {
+                                        onChange(opt.value);
+                                        setIsOpen(false);
+                                        setSearch('');
+                                    }}
+                                    className="p-3 hover:bg-slate-800 cursor-pointer flex justify-between items-center group transition-colors"
+                                >
+                                    <div>
+                                        <div className="text-sm font-medium text-gray-200 group-hover:text-white">{opt.label}</div>
+                                        {opt.subLabel && <div className="text-[10px] text-gray-500 font-mono">{opt.subLabel}</div>}
+                                    </div>
+                                    {opt.statusColor && opt.statusLabel && (
+                                        <div className={`text-[10px] font-bold ${opt.statusColor} bg-white/10 px-2 py-0.5 rounded uppercase`}>
+                                            {opt.statusLabel}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        {options.filter(opt =>
+                            !search ||
+                            opt.label.toLowerCase().includes(search.toLowerCase()) ||
+                            (opt.subLabel && opt.subLabel.toLowerCase().includes(search.toLowerCase()))
+                        ).length === 0 && (
+                                <div className="p-4 text-center text-gray-500 text-sm">
+                                    No results found.
+                                </div>
+                            )}
+                    </div>
+                </>
+            )}
+        </div>
+    );
+};
+
 const DeliveryOrderManagement: React.FC = () => {
     // --- STATE ---
     const [orders, setOrders] = useState<SalesOrder[]>([]);
@@ -666,108 +785,124 @@ const DeliveryOrderManagement: React.FC = () => {
                                     <Box size={16} /> Order Items
                                 </h3>
 
-                                <div className="bg-slate-900/30 border border-slate-800 rounded-xl p-5 space-y-5">
-                                    {/* Entry Mode Switch */}
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={() => setEntryMode('search')}
-                                            className={`px-4 py-2 rounded-lg text-xs font-bold uppercase transition-all flex items-center gap-2 ${entryMode === 'search' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-slate-200'}`}
-                                        >
-                                            <Search size={14} /> Search SKU
-                                        </button>
-                                        <button
-                                            onClick={() => setEntryMode('manual')}
-                                            className={`px-4 py-2 rounded-lg text-xs font-bold uppercase transition-all flex items-center gap-2 ${entryMode === 'manual' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-slate-200'}`}
-                                        >
-                                            <ListFilter size={14} /> Manual Build
-                                        </button>
+                                {/* Use SimpleStock Style for Layout */}
+                                <div className="bg-slate-900/80 rounded-2xl border border-slate-800 shadow-lg flex flex-col min-h-[400px]">
+                                    <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+                                        <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase">
+                                            <Box size={14} /> Items List
+                                        </div>
+                                        <div className="text-xs font-bold text-slate-600 bg-slate-900 px-2 py-1 rounded">
+                                            {newOrderItems.length} Items
+                                        </div>
                                     </div>
 
-                                    {/* Inputs */}
-                                    <div className="space-y-4">
-                                        {entryMode === 'search' ? (
-                                            <div className="relative">
-                                                <input
-                                                    type="text"
-                                                    placeholder="Search product name or SKU..."
-                                                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:border-blue-500/50 outline-none"
-                                                    value={itemSearchTerm}
-                                                    onChange={e => { setItemSearchTerm(e.target.value); setSelectedV2Item(null); }}
-                                                />
-                                                {/* Results */}
-                                                {itemSearchTerm && !selectedV2Item && (
-                                                    <div className="absolute w-full mt-2 bg-slate-900 border border-slate-700 rounded-xl z-20 max-h-48 overflow-y-auto shadow-2xl">
-                                                        {filteredV2Items.map(item => (
-                                                            <div key={item.sku} onClick={() => { setSelectedV2Item(item); setItemSearchTerm(item.name); }} className="p-3 hover:bg-slate-800 cursor-pointer flex justify-between items-center group">
-                                                                <div>
-                                                                    <div className="text-sm font-medium text-slate-200 group-hover:text-blue-300">{item.name}</div>
-                                                                    <div className="text-xs text-slate-500">{item.sku}</div>
-                                                                </div>
-                                                                <div className="text-xs font-bold text-slate-500 bg-slate-800 px-2 py-1 rounded">Stock: {stockMap[item.sku] || 0}</div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                                {selectedV2Item && (
-                                                    <div className="mt-2 text-xs text-blue-400 flex items-center gap-2">
-                                                        <CheckCircle size={12} /> Selected: <span className="font-bold">{selectedV2Item.sku}</span>
-                                                    </div>
-                                                )}
+                                    {/* Existing Items List (SimpleStock Card Style) */}
+                                    <div className="flex-1 p-4 space-y-2 overflow-y-auto max-h-[400px]">
+                                        {newOrderItems.length === 0 ? (
+                                            <div className="text-center py-12 text-slate-700 text-sm italic border-2 border-dashed border-slate-800/50 rounded-xl">
+                                                List empty. Add items below.
                                             </div>
                                         ) : (
-                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                                {/* Manual Selects */}
-                                                <select value={currentItemLayer} onChange={e => setCurrentItemLayer(e.target.value as any)} className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-2 text-xs text-white outline-none">
-                                                    {PRODUCT_LAYERS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
-                                                </select>
-                                                <select value={currentItemMaterial} onChange={e => setCurrentItemMaterial(e.target.value as any)} className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-2 text-xs text-white outline-none">
-                                                    {PRODUCT_MATERIALS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
-                                                </select>
-                                                <select value={currentItemSize} onChange={e => setCurrentItemSize(e.target.value as any)} className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-2 text-xs text-white outline-none">
-                                                    {PRODUCT_SIZES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
-                                                </select>
+                                            newOrderItems.map((item, idx) => (
+                                                <div key={idx} className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex justify-between items-center group hover:border-slate-700 transition-colors">
+                                                    <div className="flex-1">
+                                                        <div className="font-bold text-white text-sm">{item.product}</div>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-[10px] text-slate-500 font-mono">{item.sku}</span>
+                                                            <span className="text-[10px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded uppercase font-bold border border-blue-500/20">
+                                                                {item.packaging || 'Unit'}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="text-sm font-bold text-orange-400 bg-slate-900 px-2 py-1 rounded">
+                                                            x {item.quantity}
+                                                        </div>
+                                                        <button onClick={() => handleRemoveItem(idx)} className="text-slate-600 hover:text-red-500 p-1 rounded-full hover:bg-slate-900 transition-colors">
+                                                            <X size={16} />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+
+                                    {/* Add Row (Footer) */}
+                                    <div className="bg-slate-800/50 p-4 border-t border-slate-700/50 flex flex-col gap-3 rounded-b-2xl">
+                                        <div className="flex justify-between items-center">
+                                            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Quick Add</div>
+                                            {/* Mode Switcher if needed, kept hidden for now or use simplified */}
+                                            <div className="flex gap-2">
+                                                <button onClick={() => setEntryMode('search')} className={`text-[10px] uppercase font-bold px-2 py-1 rounded ${entryMode === 'search' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>Search</button>
+                                                <button onClick={() => setEntryMode('manual')} className={`text-[10px] uppercase font-bold px-2 py-1 rounded ${entryMode === 'manual' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>Manual</button>
+                                            </div>
+                                        </div>
+
+                                        {entryMode === 'search' ? (
+                                            <div className="flex flex-col gap-3">
+                                                <SearchableSelect
+                                                    placeholder="Select Product..."
+                                                    options={v2Items.map(item => ({
+                                                        value: item.sku,
+                                                        label: item.name,
+                                                        subLabel: `${item.sku} • Stock: ${stockMap[item.sku] || 0}`,
+                                                        statusColor: (stockMap[item.sku] || 0) < 100 ? 'text-red-400' : 'text-green-400',
+                                                        statusLabel: (stockMap[item.sku] || 0) < 100 ? 'LOW' : 'OK'
+                                                    }))}
+                                                    value={selectedV2Item?.sku || ''}
+                                                    onChange={(val) => {
+                                                        const i = v2Items.find(x => x.sku === val);
+                                                        setSelectedV2Item(i || null);
+                                                        if (i) setItemSearchTerm(i.name);
+                                                    }}
+                                                    minimal
+                                                />
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        type="number"
+                                                        placeholder="Qty"
+                                                        className="w-24 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white text-right font-bold outline-none focus:border-orange-500 text-sm"
+                                                        value={currentItemQty || ''}
+                                                        onChange={e => setCurrentItemQty(Number(e.target.value))}
+                                                    />
+                                                    <button
+                                                        onClick={handleAddItem}
+                                                        disabled={!selectedV2Item || !currentItemQty}
+                                                        className="flex-1 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2"
+                                                    >
+                                                        <Plus size={16} /> Add Item
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            // Manual Fallback
+                                            <div className="space-y-2">
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <select value={currentItemLayer} onChange={e => setCurrentItemLayer(e.target.value as any)} className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-2 text-xs text-white outline-none">
+                                                        {PRODUCT_LAYERS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+                                                    </select>
+                                                    <select value={currentItemMaterial} onChange={e => setCurrentItemMaterial(e.target.value as any)} className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-2 text-xs text-white outline-none">
+                                                        {PRODUCT_MATERIALS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+                                                    </select>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        type="number"
+                                                        placeholder="Qty"
+                                                        className="w-24 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white text-right font-bold outline-none focus:border-orange-500 text-sm"
+                                                        value={currentItemQty || ''}
+                                                        onChange={e => setCurrentItemQty(Number(e.target.value))}
+                                                    />
+                                                    <button
+                                                        onClick={handleAddItem}
+                                                        className="flex-1 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2"
+                                                    >
+                                                        <Plus size={16} /> Add (Manual)
+                                                    </button>
+                                                </div>
                                             </div>
                                         )}
-
-                                        <div className="flex gap-4">
-                                            <input
-                                                type="number"
-                                                placeholder="Qty"
-                                                className="w-24 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white font-mono focus:border-blue-500/50 outline-none"
-                                                value={currentItemQty}
-                                                onChange={e => setCurrentItemQty(Number(e.target.value))}
-                                            />
-                                            <button
-                                                onClick={handleAddItem}
-                                                className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl font-bold text-sm transition-all"
-                                            >
-                                                Add Item
-                                            </button>
-                                        </div>
                                     </div>
-                                </div>
-
-                                {/* Items List Table */}
-                                <div className="mt-4 space-y-2">
-                                    {newOrderItems.map((item, idx) => (
-                                        <div key={idx} className="flex justify-between items-center p-3 bg-slate-900 border border-slate-800 rounded-lg group">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded bg-slate-800 flex items-center justify-center text-slate-500 font-bold text-xs">
-                                                    {idx + 1}
-                                                </div>
-                                                <div>
-                                                    <div className="text-sm font-bold text-slate-200">{item.product}</div>
-                                                    <div className="text-xs text-slate-500">{item.sku}</div>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-4">
-                                                <div className="font-mono text-sm text-blue-400 font-bold">{item.quantity} units</div>
-                                                <button onClick={() => handleRemoveItem(idx)} className="text-slate-600 hover:text-red-400 transition-colors">
-                                                    <X size={16} />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ))}
                                 </div>
                             </div>
                         </div>
