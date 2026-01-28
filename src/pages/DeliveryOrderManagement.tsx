@@ -5,8 +5,7 @@ import { getV2Items } from '../services/apiV2';
 import { determineZone, findBestFactory } from '../utils/logistics';
 import {
     Plus, Search, Calendar, FileText, X, Truck,
-    User as UserIcon, ListFilter, Box, Sparkles,
-
+    User as UserIcon, ListFilter, Box, Sparkles, Zap
 } from 'lucide-react';
 import {
     SalesOrder,
@@ -23,6 +22,7 @@ import {
     PACKAGING_COLORS,
     PRODUCT_SIZES
 } from '../data/constants';
+import SimpleStock from './SimpleStock';
 
 const DeliveryOrderManagement: React.FC = () => {
     // --- STATE ---
@@ -30,6 +30,7 @@ const DeliveryOrderManagement: React.FC = () => {
     const [drivers, setDrivers] = useState<User[]>([]);
 
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [isStockOutOpen, setIsStockOutOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('All');
 
@@ -175,6 +176,42 @@ const DeliveryOrderManagement: React.FC = () => {
 
     // --- HANDLERS ---
 
+    // APPROVE AMENDMENT
+    const handleApproveAmendment = async (order: SalesOrder) => {
+        if (!window.confirm(`Approve changes for Order ${order.orderNumber}? \nThis will deduct stock and mark as Delivered.`)) return;
+
+        try {
+            // 1. Deduct Stock for approved amended quantities
+            for (const item of order.items || []) {
+                const qtyToDeduct = item.quantity || 0;
+                if (qtyToDeduct > 0) {
+                    const { error } = await supabase.rpc('record_stock_movement', {
+                        p_sku: item.sku,
+                        p_qty: -qtyToDeduct, // Negative OUT
+                        p_event_type: 'Transfer Out',
+                        p_ref_doc: order.orderNumber,
+                        p_notes: `Approved Amend: ${order.notes || ''}`
+                    });
+                    if (error) console.error("Stock error for " + item.sku, error);
+                }
+            }
+
+            // 2. Update Status
+            const { error } = await supabase.from('sales_orders').update({
+                status: 'Delivered',
+                pod_timestamp: new Date().toISOString()
+            }).eq('id', order.id);
+
+            if (error) throw error;
+
+            alert("✅ Approved & Stock Deducted!");
+            fetchData();
+
+        } catch (e: any) {
+            alert("Error: " + e.message);
+        }
+    };
+
     const handleAddItem = () => {
         if (currentItemQty <= 0) return alert("Please enter a valid quantity.");
 
@@ -243,11 +280,21 @@ const DeliveryOrderManagement: React.FC = () => {
         if (newOrderItems.length === 0) return alert("Add at least one item");
 
         try {
-            const doNumber = `DO-${new Date().getFullYear()}-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
+            let doNumber;
+            if (editingOrderId) {
+                // Keep existing DO Number
+                const existingOrder = orders.find(o => o.id === editingOrderId);
+                doNumber = existingOrder?.orderNumber;
+            } else {
+                // Generate New DO Number (Legacy Format or match new one?)
+                // For now keeping legacy random for this manual form unless specified otherwise
+                doNumber = `DO-${new Date().getFullYear()}-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
+            }
+
             const zone = determineZone(newOrderAddress || '');
             const bestFactory = findBestFactory(zone, newOrderItems, stockMap);
 
-            const payload = {
+            const payload: any = {
                 order_number: doNumber,
                 customer: orderCustomer,
                 delivery_address: newOrderAddress,
@@ -361,11 +408,11 @@ const DeliveryOrderManagement: React.FC = () => {
                     <p className="text-slate-400 mt-1 font-medium">Assign orders, track shipments, and manage fleet.</p>
                 </div>
                 <button
-                    onClick={() => { handleCloseModal(); setIsCreateModalOpen(true); }}
-                    className="group relative bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl flex items-center gap-3 font-bold shadow-xl shadow-blue-900/20 transition-all active:scale-95"
+                    onClick={() => setIsStockOutOpen(true)}
+                    className="group relative bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white px-6 py-3 rounded-xl flex items-center gap-3 font-bold shadow-xl shadow-red-900/20 transition-all active:scale-95"
                 >
-                    <Plus size={20} className="group-hover:rotate-90 transition-transform" />
-                    New Order
+                    <Zap size={20} className="fill-white" />
+                    Quick Stock Out
                 </button>
             </div>
 
@@ -386,17 +433,24 @@ const DeliveryOrderManagement: React.FC = () => {
                 </div>
 
                 {/* Status Tabs */}
-                <div className="lg:col-span-2 flex bg-slate-900/50 backdrop-blur-sm border border-slate-800 rounded-xl p-1">
-                    {['All', 'New', 'Delivered'].map(status => (
+                <div className="lg:col-span-2 flex bg-slate-900/50 backdrop-blur-sm border border-slate-800 rounded-xl p-1 relative overflow-x-auto">
+                    {['All', 'New', 'Pending Approval', 'Delivered'].map(status => (
                         <button
                             key={status}
                             onClick={() => setStatusFilter(status)}
-                            className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${statusFilter === status
+                            className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${statusFilter === status
                                 ? 'bg-blue-600/20 text-blue-400 shadow-sm border border-blue-500/10'
                                 : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
                                 }`}
                         >
-                            {status}
+                            {status === 'Pending Approval' ? (
+                                <span className="flex items-center gap-2">
+                                    Pending
+                                    {orders.filter(o => o.status === 'Pending Approval').length > 0 && (
+                                        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                                    )}
+                                </span>
+                            ) : status}
                         </button>
                     ))}
                 </div>
@@ -474,6 +528,21 @@ const DeliveryOrderManagement: React.FC = () => {
                                                 <div className="text-[10px] text-slate-600 italic">+ {order.items.length - 3} more items</div>
                                             )}
                                         </div>
+
+                                        {/* APPROVE BUTTON FOR VIVIAN */}
+                                        {order.status === 'Pending Approval' && (
+                                            <div className="mt-3 pt-3 border-t border-slate-800">
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleApproveAmendment(order);
+                                                    }}
+                                                    className="w-full py-2 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white rounded-lg font-bold text-xs uppercase flex items-center justify-center gap-2 shadow-lg shadow-red-900/30"
+                                                >
+                                                    <Zap size={14} /> Review & Approve Amend
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 ))}
                                 {driverOrders.length === 0 && (
@@ -712,6 +781,20 @@ const DeliveryOrderManagement: React.FC = () => {
                             >
                                 {editingOrderId ? 'Save Changes' : 'Confirm Order'}
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* --- QUICK STOCK OUT MODAL --- */}
+            {isStockOutOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200 p-4">
+                    <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto custom-scrollbar bg-slate-950 rounded-2xl border border-slate-800 shadow-2xl relative">
+                        {/* Pass onClose to SimpleStock so it can render a back button or we handle it here. 
+                             Actually SimpleStock logic I added handles the button rendering if onClose is present.
+                         */}
+                        <div className="p-4">
+                            <SimpleStock onClose={() => setIsStockOutOpen(false)} isModal={true} />
                         </div>
                     </div>
                 </div>

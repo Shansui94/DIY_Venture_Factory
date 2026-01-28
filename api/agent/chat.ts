@@ -6,7 +6,9 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY)!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// --- INLINED AI SERVICE (To avoid Vercel Import Issues) ---
+// --- INLINED AI SERVICE (Refactored to use SDK) ---
+import { GoogleGenerativeAI } from '@google/generative-ai';
+
 const aiService = {
     async askSupervisor(query: string, contextData: any): Promise<string> {
         const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY || '';
@@ -55,43 +57,35 @@ const aiService = {
             **Make it sound like a real report to a boss, not a chatbot.**
             `;
 
-            console.log("Using REST API for Gemini...");
-            const apiVersion = "v1beta";
-            const candidates = ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-pro-latest"];
-            let lastError;
+            console.log("Using GoogleGenerativeAI SDK...");
+            const genAI = new GoogleGenerativeAI(apiKey);
 
+            // PAY-AS-YOU-GO Strategy: Prioritize 2.0 Flash (Smarter) over Lite
+            const candidates = ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-2.5-flash"];
+
+            let lastError;
             for (const modelId of candidates) {
                 try {
                     console.log(`Trying model: ${modelId}...`);
-                    const url = `https://generativelanguage.googleapis.com/${apiVersion}/models/${modelId}:generateContent?key=${apiKey}`;
+                    const model = genAI.getGenerativeModel({ model: modelId });
+                    const result = await model.generateContent(prompt);
+                    const response = await result.response;
+                    const text = response.text();
 
-                    const response = await fetch(url, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-                    });
-
-                    if (!response.ok) {
-                        const errorText = await response.text();
-                        console.warn(`Gemini API Error ${response.status}: ${errorText}`);
-                        throw new Error(`Gemini API Error ${response.status}`);
-                    }
-
-                    const data = await response.json();
-                    if (data.candidates && data.candidates.length > 0 && data.candidates[0].content) {
-                        return data.candidates[0].content.parts[0].text;
-                    }
+                    if (text) return text;
                 } catch (e: any) {
-                    console.warn(`Failed ${modelId}: ${e.message}`);
+                    console.warn(`Model ${modelId} failed: ${e.message}`);
                     lastError = e;
+                    // If it's a safety block or authenticaton error, failing other models might not help, but we retry anyway for 429s/404s
                 }
             }
-            throw lastError || new Error("All models failed.");
+
+            throw lastError || new Error("All AI models failed to respond.");
 
         } catch (error: any) {
             console.error("AI Service Error:", error);
-            // Return a polite fallback instead of crashing
-            return "I am currently overloaded and cannot process complex queries. Please try again in a moment.";
+            // Return actual error for debugging
+            return `AI Service Error: ${error.message || "Unknown error"}. (Key present: ${!!(process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY)})`;
         }
     }
 };

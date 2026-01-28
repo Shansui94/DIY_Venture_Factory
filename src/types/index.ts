@@ -92,7 +92,7 @@ export interface SalesOrder {
         quantity: number; // Rolls
         remark?: string; // NEW: Remark field
     }[];
-    status: 'New' | 'Planned' | 'In-Production' | 'Ready-to-Ship' | 'Shipped' | 'Delivered' | 'Cancelled';
+    status: 'New' | 'Planned' | 'In-Production' | 'Ready-to-Ship' | 'Shipped' | 'Delivered' | 'Cancelled' | 'Pending Approval';
     orderDate: string;
     deadline: string;
     notes?: string;

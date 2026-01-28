@@ -34,6 +34,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
 
     const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
 
+    // Special User Check
+    const isVivian = user?.email === 'diyadmin1111@gmail.com';
+
     const NavGroup = ({ title, children }: { title: string, children: React.ReactNode }) => (
         <div className="mb-6">
             <h3 className="px-4 text-[11px] font-black text-gray-500 uppercase tracking-[0.2em] mb-3 opacity-90">{title}</h3>
@@ -108,11 +111,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                 `}>        {/* Brand Area */}
                     <div className="hidden lg:flex flex-col px-6 pt-8 pb-8">
                         <div className="flex items-center gap-3 mb-1">
-                            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 flex items-center justify-center text-white font-black text-xl shadow-[0_4px_20px_rgba(79,70,229,0.3)]">
-                                V
-                            </div>
+                            <img src="/packsecure-logo.jpg" alt="PackSecure" className="h-10 rounded-lg" />
                             <div>
-                                <h1 className="font-black text-2xl tracking-tighter text-white leading-none">Packsecure</h1>
                                 <div className="flex items-center gap-1.5 mt-1">
                                     <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span>
                                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">System v6.7 • Data Center Active</p>
@@ -124,7 +124,16 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                     {/* Navigation Links */}
                     <nav className="flex-1 overflow-y-auto px-4 custom-scrollbar space-y-2 pb-6">
                         {/* EXECUTIVE SUITE (SuperAdmin, Admin, Manager) */}
-                        {(userRole === 'SuperAdmin' || userRole === 'Admin' || userRole === 'Manager' || user?.employeeId === '001') && (
+                        {/* VIVIAN'S EXCLUSIVE WORKSPACE */}
+                        {isVivian && (
+                            <NavGroup title="Vivian Workspace">
+                                <NavItem id="livestock" icon={BarChart3} label="Live Stock" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                <NavItem id="delivery" icon={Truck} label="Delivery Orders" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                            </NavGroup>
+                        )}
+
+                        {/* EXECUTIVE SUITE (SuperAdmin, Admin, Manager) - HIDDEN FROM VIVIAN */}
+                        {!isVivian && (userRole === 'SuperAdmin' || userRole === 'Admin' || userRole === 'Manager' || user?.employeeId === '001') && (
                             <>
                                 <NavGroup title="Executive Suite">
                                     <NavItem id="dashboard" icon={LayoutDashboard} label="Dashboard" roles={['SuperAdmin', 'Admin', 'Manager']} />
@@ -167,6 +176,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                         {userRole === 'Driver' && (
                             <NavGroup title="Driver Workspace">
                                 <NavItem id="delivery-driver" icon={Package} label="My Delivery" roles={['Driver']} />
+                                <NavItem id="delivery-history" icon={ClipboardList} label="My History" roles={['Driver']} />
                                 <NavItem id="claims" icon={FileCheck} label="My Claims" roles={['Driver']} />
                             </NavGroup>
                         )}

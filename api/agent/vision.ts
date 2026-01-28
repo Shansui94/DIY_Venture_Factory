@@ -36,6 +36,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         const genAI = new GoogleGenerativeAI(apiKey);
+        // Use Standard Flash for better intelligence (Billing Enabled)
         const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
         const prompt = `Extract customer data from this image (e.g. invoice, delivery order, contact card).

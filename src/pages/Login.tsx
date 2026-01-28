@@ -1,13 +1,14 @@
 
 import React, { useState } from 'react';
-import { User, HardHat, Truck, ShieldCheck, Mail, Lock } from 'lucide-react'; // Added Mail, Lock
+import { HardHat, Truck, Mail, Lock } from 'lucide-react'; // Added Mail, Lock
 import { supabase } from '../services/supabase';
 
 interface LoginProps {
     onLogin: (email: string | null, gps: string, role: string) => void;
+    onNavigate: (page: string) => void;
 }
 
-const Login: React.FC<LoginProps> = ({ onLogin }) => {
+const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
     const [machines, setMachines] = useState<any[]>([]);
     const [selectedMachine, setSelectedMachine] = useState<string>('');
     const [password, setPassword] = useState<string>(''); // Device 1234
@@ -15,7 +16,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     const [staffPassword, setStaffPassword] = useState<string>(''); // Staff Password
 
     // Mode State: 'device' | 'staff'
-    const [loginMode, setLoginMode] = useState<'device' | 'staff'>('device');
+    const [loginMode, setLoginMode] = useState<'device' | 'staff'>('staff');
     // Forgot Password State
     const [isForgotPassword, setIsForgotPassword] = useState(false);
     const [resetEmail, setResetEmail] = useState('');
@@ -98,7 +99,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             if (error) throw error;
 
             if (data.user) {
-                onLogin(data.user.email, "GPS_AUTO", 'Staff');
+                onLogin(data.user.email || null, "GPS_AUTO", 'Staff');
             }
         } catch (err: any) {
             console.error("Staff Login Error:", err);
@@ -128,11 +129,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         }
     };
 
-    // DEMO LOGIN
-    const handleDemoLogin = (role: string) => {
-        const demoEmail = `demo.${role.toLowerCase()}@packsecure.com`;
-        onLogin(demoEmail, "GPS_MOCK", role);
-    };
+
 
     return (
         <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-slate-900 font-sans">
@@ -148,8 +145,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 <div className="text-center mb-8">
                     {!isForgotPassword && (
                         <>
-                            <div className={`w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg transition-all duration-500 ${loginMode === 'device' ? 'bg-gradient-to-tr from-cyan-500 to-blue-600 shadow-cyan-500/20' : 'bg-gradient-to-tr from-purple-500 to-pink-600 shadow-purple-500/20'}`}>
-                                {loginMode === 'device' ? <User size={40} className="text-white" /> : <ShieldCheck size={40} className="text-white" />}
+                            <div className="flex justify-center mb-6">
+                                <img src="/packsecure-logo.jpg" alt="PackSecure" className="h-16 rounded-xl shadow-lg border border-white/10" />
                             </div>
                             <h1 className="text-3xl font-black text-white tracking-tight mb-2">
                                 {loginMode === 'device' ? 'DEVICE ACCESS' : 'STAFF PORTAL'}
@@ -383,9 +380,20 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                                     >
                                         {isLoading ? 'Verifying...' : 'LOGIN TO DASHBOARD'}
                                     </button>
+
+
+                                    <div className="text-center pt-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => onNavigate('register')}
+                                            className="text-xs text-purple-400 hover:text-white font-bold uppercase tracking-widest transition-colors"
+                                        >
+                                            Don't have an account? Register
+                                        </button>
+                                    </div>
                                 </form>
 
-                                {/* DEMO ACCOUNTS */}
+                                { /* DEMO ACCOUNTS HIDDEN
                                 <div className="pt-6 border-t border-white/5">
                                     <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 text-center">— Quick Demo Access —</label>
                                     <div className="grid grid-cols-4 gap-2">
@@ -400,6 +408,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                                         ))}
                                     </div>
                                 </div>
+                                */ }
                             </div>
                         )}
 
@@ -430,7 +439,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             <div className="absolute bottom-6 text-center w-full z-10 text-slate-700 text-[10px] tracking-widest uppercase">
                 System v6.7 • Data Center Active
             </div>
-        </div>
+        </div >
     );
 };
 

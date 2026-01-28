@@ -1,428 +1,334 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
-import { Truck, MapPin, CheckCircle, Navigation, Package, User, PenTool, X, UploadCloud } from 'lucide-react';
-import { LogisticsTrip, SalesOrder } from '../types';
+import { Truck, CheckCircle, Package, LogOut, ChevronRight, X } from 'lucide-react';
+import { SalesOrder } from '../types';
 
 interface DriverDeliveryProps {
     user: any;
+    onLogout?: () => void;
 }
 
-const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
-    // Mode: 'Trip' (New) or 'Legacy' (Fallback)
-    const [activeTrip, setActiveTrip] = useState<LogisticsTrip | null>(null);
-    const [adhocOrders, setAdhocOrders] = useState<SalesOrder[]>([]);
+const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onLogout }) => {
+    // State
+    const [tasks, setTasks] = useState<SalesOrder[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState<'todo' | 'done'>('todo');
 
-    // POD State
+    // NAIK BARANG (Load Items) State
     const [selectedOrder, setSelectedOrder] = useState<SalesOrder | null>(null);
-    const [isPODOpen, setIsPODOpen] = useState(false);
-    const [signature, setSignature] = useState<string | null>(null);
-    const [photoFunction, setPhotoFunction] = useState<File | null>(null);
-    const [uploading, setUploading] = useState(false);
+    const [isLoadModalOpen, setIsLoadModalOpen] = useState(false);
+    const [loadItems, setLoadItems] = useState<any[]>([]); // Items to verify
+    const [submitting, setSubmitting] = useState(false);
 
-    // Canvas Ref for Signature
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const isDrawing = useRef(false);
+    // 1. Fetch Data
+    const fetchTasks = async () => {
+        setLoading(true);
+        if (!user?.uid) return;
 
-    const fetchData = async () => {
         try {
-            if (!user?.uid) return;
-
-            // 1. Check for Active Trip (En-Route)
-            const { data: tripData } = await supabase
-                .from('logistics_trips')
-                .select(`*, sys_vehicles(*)`)
-                .eq('driver_id', user.uid)
-                .in('status', ['En-Route', 'Ready', 'Loading']) // Show even if loading
-                .order('created_at', { ascending: false })
-                .limit(1)
-                .single();
-
-            if (tripData) {
-                // Fetch Orders for Trip
-                const { data: orders } = await supabase
-                    .from('sales_orders')
-                    .select('*')
-                    .eq('trip_id', tripData.trip_id)
-                    .order('stop_sequence', { ascending: true });
-
-                setActiveTrip({
-                    ...tripData,
-                    orders: orders || [],
-                    vehicle: tripData.sys_vehicles
-                });
-                setActiveTrip(null);
-            }
-
-            // 2. Fetch Ad-hoc Orders (Direct Assignments)
-            const { data: directOrders } = await supabase
+            // Fetch assigned orders with items
+            const { data } = await supabase
                 .from('sales_orders')
                 .select('*')
                 .eq('driver_id', user.uid)
-                .is('trip_id', null)
-                .neq('status', 'Delivered') // Hide delivered ones from main view? or show recent?
                 .neq('status', 'Cancelled')
-                .order('created_at', { ascending: false });
+                .order('order_date', { ascending: false });
 
-            if (directOrders) {
-                setAdhocOrders(directOrders);
+            if (data) {
+                // Map DB snake_case to TS camelCase
+                const mapped = data.map((item: any) => ({
+                    ...item,
+                    orderNumber: item.order_number || item.orderNumber,
+                    deliveryAddress: item.delivery_address || item.deliveryAddress,
+                    zone: item.zone || item.delivery_zone
+                }));
+
+                // Client-side sort
+                const sorted = mapped.sort((a: any, b: any) => {
+                    // "New" or "Assigned" first (Need Loading)
+                    // "Loaded" next
+                    // "Delivered" last (handled by tab filter)
+                    const statusA = a.status;
+                    const statusB = b.status;
+
+                    const getStatusPriority = (status: string) => {
+                        if (status === 'Assigned' || status === 'New') return 1;
+                        if (status === 'Loaded') return 2;
+                        return 3; // Other statuses, including 'Delivered'
+                    };
+
+                    const priorityA = getStatusPriority(statusA);
+                    const priorityB = getStatusPriority(statusB);
+
+                    if (priorityA !== priorityB) {
+                        return priorityA - priorityB;
+                    }
+
+                    return (a.stop_sequence || 999) - (b.stop_sequence || 999);
+                });
+                setTasks(sorted);
             }
-
-        } catch (error) {
-            console.error("Driver Load Error:", error);
+        } catch (e) {
+            console.error(e);
         } finally {
-            // setLoading(false);
+            setLoading(false);
         }
     };
 
     useEffect(() => {
-        fetchData();
+        fetchTasks();
     }, [user]);
 
-    // --- POD LOGIC ---
-
-    const openPOD = (order: SalesOrder) => {
+    // 2. Open Load Modal
+    const handleOpenLoadModal = (order: SalesOrder) => {
         setSelectedOrder(order);
-        setSignature(null);
-        setPhotoFunction(null);
-        setIsPODOpen(true);
-        setTimeout(initCanvas, 100); // Delay for modal render
+        // Deep copy items to allow editing quantity if needed (default same qty)
+        setLoadItems(order.items?.map(i => ({ ...i, confirmedQty: i.quantity })) || []);
+        setIsLoadModalOpen(true);
     };
 
-    const initCanvas = () => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        ctx.strokeStyle = '#000000';
-        ctx.lineWidth = 2;
-        ctx.lineCap = 'round';
-
-        // Handle resizing? keeping it fixed for MVP
-        canvas.width = canvas.offsetWidth;
-        canvas.height = canvas.offsetHeight;
-
-        // White background
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-    };
-
-    const startDrawing = (e: any) => {
-        isDrawing.current = true;
-        draw(e);
-    };
-
-    const stopDrawing = () => {
-        isDrawing.current = false;
-        const canvas = canvasRef.current;
-        if (canvas) {
-            ctx(canvas)?.beginPath(); // reset path
-            setSignature(canvas.toDataURL()); // Save state
-        }
-    };
-
-    const draw = (e: any) => {
-        if (!isDrawing.current || !canvasRef.current) return;
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        const rect = canvas.getBoundingClientRect();
-        const clientX = e.clientX || e.touches?.[0]?.clientX;
-        const clientY = e.clientY || e.touches?.[0]?.clientY;
-
-        ctx.lineTo(clientX - rect.left, clientY - rect.top);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(clientX - rect.left, clientY - rect.top);
-    };
-
-    const ctx = (canvas: HTMLCanvasElement) => canvas.getContext('2d');
-
-    const handlePODSubmit = async () => {
+    // 3. Submit Loading (Deduct Stock)
+    const handleConfirmLoad = async () => {
         if (!selectedOrder) return;
-        setUploading(true);
+        setSubmitting(true);
 
         try {
-            let photoUrl = '';
-            let signatureUrl = signature; // DataURL is fine for now, or upload as file
+            // Check for Amendments
+            const hasAmendments = loadItems.some(item => item.confirmedQty !== undefined && item.confirmedQty !== item.quantity);
 
-            // Upload Photo if exists
-            if (photoFunction) {
-                // const fileName = `pod/${selectedOrder.id}/${Date.now()}.jpg`;
-                // Mock Upload for MVP (or real if bucket exists). 
-                // Assuming no storage bucket 'pod' configured yet. 
-                // We'll skip actual upload to bucket and use a placeholder or dataURL if small
-                // For MVP, we'll just alert that upload is simulated unless bucket exists.
-                // Assuming bucket 'public' exists?
-                console.log("Simulating Upload of photo:", photoFunction.name);
-                photoUrl = "https://placehold.co/600x400?text=POD+Photo";
+            if (hasAmendments) {
+                // 1. UPDATE ORDER with new quantities & Pending Approval Status
+                // Map items to update quantities permanently
+                const updatedItems = selectedOrder.items?.map(original => {
+                    const match = loadItems.find(li => li.sku === original.sku && li.remark === original.remark);
+                    return {
+                        ...original,
+                        quantity: match?.confirmedQty ?? original.quantity,
+                        original_quantity: original.quantity // Keep track of original
+                    };
+                });
+
+                await supabase.from('sales_orders').update({
+                    status: 'Pending Approval',
+                    items: updatedItems,
+                    notes: (selectedOrder.notes || '') + ` | Amended by Driver: ${user?.name}`
+                }).eq('id', selectedOrder.id);
+
+                alert("⚠️ Order quantity changed. Sent to Vivian for Approval.");
+
+            } else {
+                // 2. NO AMENDMENTS - Proceed to Deduct & Deliver
+                for (const item of loadItems) {
+                    const qtyToDeduct = item.confirmedQty || item.quantity;
+                    if (qtyToDeduct > 0) {
+                        const { error } = await supabase.rpc('record_stock_movement', {
+                            p_sku: item.sku,
+                            p_qty: -qtyToDeduct, // Negative for OUT
+                            p_event_type: 'Transfer Out',
+                            p_ref_doc: selectedOrder.orderNumber,
+                            p_notes: `Loaded by Driver: ${user?.name || 'Unknown'} `
+                        });
+                        if (error) throw error;
+                    }
+                }
+
+                await supabase.from('sales_orders').update({
+                    status: 'Delivered',
+                    pod_timestamp: new Date().toISOString()
+                }).eq('id', selectedOrder.id);
+
+                alert("✅ Stock Deducted & Loaded!");
             }
 
-            // Update Order
-            await supabase.from('sales_orders').update({
-                status: 'Delivered',
-                pod_signed_by: 'Customer (Digital)', // Could ask for name
-                pod_signature_url: signatureUrl, // Storing base64 directly might be large, but ok for MVP < 100kb
-                pod_photo_url: photoUrl,
-                pod_timestamp: new Date().toISOString()
-            }).eq('id', selectedOrder.id);
+            setIsLoadModalOpen(false);
+            fetchTasks();
 
-            alert("Delivery Confirmed!");
-            setIsPODOpen(false);
-            fetchData();
         } catch (e: any) {
-            alert("Error saving POD: " + e.message);
+            alert("Error: " + e.message);
         } finally {
-            setUploading(false);
+            setSubmitting(false);
         }
     };
 
-    const handleCompleteTrip = async () => {
-        if (!activeTrip) return;
-        const confirm = window.confirm("Mark trip as COMPLETED? This will alert dispatch.");
-        if (confirm) {
-            await supabase.from('logistics_trips').update({
-                status: 'Completed',
-                completed_at: new Date().toISOString()
-            }).eq('trip_id', activeTrip.trip_id);
-
-            alert("Trip Completed. Great job!");
-            fetchData(); // Will likely clear the view
-        }
-    };
+    // View Logic
+    const todoList = tasks.filter(t => t.status !== 'Delivered' && t.status !== 'Cancelled');
+    const doneList = tasks.filter(t => t.status === 'Delivered');
+    const displayList = activeTab === 'todo' ? todoList : doneList;
 
     return (
-        <div className="min-h-screen bg-[#121215] text-white p-4 pb-20">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-6">
+        <div className="min-h-screen bg-black text-slate-200 pb-20 font-sans">
+            {/* TOP BAR */}
+            <div className="sticky top-0 z-30 bg-black/90 backdrop-blur-md border-b border-white/10 p-4 flex justify-between items-center">
                 <div>
-                    <h1 className="text-2xl font-black uppercase text-white">Driver Mode</h1>
-                    <div className="flex items-center gap-2 text-gray-500 text-xs mt-1">
-                        <User size={12} /> {user?.name || 'Driver'}
-                        <span className="text-gray-700">|</span>
-                        <Truck size={12} /> {(activeTrip?.vehicle as any)?.plate_number || 'No Vehicle'}
-                    </div>
+                    <img src="/packsecure-logo.jpg" alt="PackSecure" className="h-8 mb-1" />
+                    <p className="text-[10px] font-bold text-slate-500 uppercase">{user?.name || 'Unknown Driver'} • {tasks.length} Orders</p>
                 </div>
-                {activeTrip && (
-                    <div className="bg-green-500/20 text-green-400 px-3 py-1 rounded-lg text-xs font-bold uppercase border border-green-500/30 animate-pulse">
-                        On Trip
-                    </div>
+                {onLogout && (
+                    <button onClick={onLogout} className="p-2 bg-slate-900 rounded-full text-slate-400">
+                        <LogOut size={16} />
+                    </button>
                 )}
             </div>
 
-            {/* TRIP VIEW */}
-            {activeTrip ? (
-                <div className="space-y-6">
-                    {/* Trip Card */}
-                    <div className="bg-gradient-to-br from-[#1e1e24] to-[#121215] p-5 rounded-2xl border border-white/10 shadow-xl">
-                        <div className="flex justify-between items-start mb-4">
-                            <div>
-                                <div className="text-xs text-gray-500 uppercase tracking-widest font-bold">Current Trip</div>
-                                <div className="text-xl font-black text-white">{activeTrip.trip_number}</div>
-                            </div>
-                            <div className="text-right">
-                                <div className="text-2xl font-black text-blue-500">
-                                    {activeTrip.orders?.filter(o => o.status === 'Delivered').length} / {activeTrip.orders?.length}
-                                </div>
-                                <div className="text-[10px] text-gray-500 uppercase font-bold">Completed</div>
-                            </div>
-                        </div>
+            {/* TABS */}
+            <div className="p-4 flex gap-2">
+                <button
+                    onClick={() => setActiveTab('todo')}
+                    className={`flex - 1 py - 3 rounded - xl font - black uppercase text - sm tracking - wider transition - all ${activeTab === 'todo' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'bg-slate-900 text-slate-500'
+                        } `}
+                >
+                    Pending ({todoList.length})
+                </button>
+                <button
+                    onClick={() => setActiveTab('done')}
+                    className={`flex - 1 py - 3 rounded - xl font - black uppercase text - sm tracking - wider transition - all ${activeTab === 'done' ? 'bg-green-600/20 text-green-500 border border-green-500/30' : 'bg-slate-900 text-slate-500'
+                        } `}
+                >
+                    Done ({doneList.length})
+                </button>
+            </div>
 
-                        {/* Progress Bar */}
-                        <div className="w-full bg-black/50 h-2 rounded-full overflow-hidden">
-                            <div
-                                className="h-full bg-blue-500 transition-all duration-500"
-                                style={{ width: `${(activeTrip.orders?.filter(o => o.status === 'Delivered').length || 0) / (activeTrip.orders?.length || 1) * 100}%` }}
-                            />
+            {/* LIST */}
+            <div className="px-4 space-y-4">
+                {loading ? (
+                    <div className="text-center py-10 text-slate-500 animate-pulse">Loading...</div>
+                ) : displayList.length === 0 ? (
+                    <div className="text-center py-12 bg-slate-900/50 rounded-2xl border-2 border-dashed border-slate-800">
+                        <Package size={40} className="mx-auto mb-3 text-slate-700" />
+                        <h3 className="font-bold text-slate-500">No orders found.</h3>
+                    </div>
+                ) : (
+                    displayList.map((order) => (
+                        <div key={order.id} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg relative">
+                            {/* Status Strip */}
+                            <div className={`absolute left - 0 top - 0 bottom - 0 w - 1.5 ${order.status === 'Delivered' ? 'bg-green-500' : 'bg-blue-500'} `} />
+
+                            {/* Card Body */}
+                            <div className="p-5 pl-7">
+                                <div className="flex justify-between items-start mb-6">
+                                    {/* Swapped: State is now main title, Customer is subtitle */}
+                                    <h2 className="text-lg font-black text-white line-clamp-1">{order.deliveryAddress || 'No State'}</h2>
+                                    <div className="flex flex-col items-end gap-1">
+                                        <span className="text-[10px] font-mono font-bold bg-slate-800 px-2 py-1 rounded text-slate-400">
+                                            #{order.orderNumber?.slice(-4)}
+                                        </span>
+                                        {/* Parse Places from Notes */}
+                                        {order.notes?.includes('Places:') && (
+                                            <span className="text-[10px] font-bold bg-purple-500/10 text-purple-400 border border-purple-500/20 px-2 py-0.5 rounded uppercase">
+                                                {order.notes.split('Places:')[1]?.trim()} Places
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+
+
+                                {/* ACTION BUTTON (Only for To-Do) */}
+                                {activeTab === 'todo' && (
+                                    <button
+                                        onClick={() => handleOpenLoadModal(order)}
+                                        className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold uppercase text-sm tracking-widest flex items-center justify-center gap-3 shadow-lg shadow-blue-900/30 active:scale-95 transition-all"
+                                    >
+                                        <Truck size={18} /> Naik Barang
+                                        <ChevronRight size={16} className="opacity-50" />
+                                    </button>
+                                )}
+
+                                {activeTab === 'done' && (
+                                    <div className="bg-green-500/10 border border-green-500/20 text-green-400 text-center py-2 rounded-xl text-xs font-bold uppercase flex items-center justify-center gap-2">
+                                        <CheckCircle size={14} /> Stock Deducted
+                                    </div>
+                                )}
+                            </div>
                         </div>
+                    ))
+                )}
+            </div>
+
+            {/* LOADING MODAL */}
+            {isLoadModalOpen && selectedOrder && (
+                <div className="fixed inset-0 z-50 bg-black flex flex-col animate-in slide-in-from-bottom-10">
+                    {/* Header */}
+                    <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900">
+                        <div>
+                            <h2 className="font-black text-white text-lg">VERIFY STOCK</h2>
+                            <p className="text-[10px] text-slate-500 uppercase font-bold">{selectedOrder.orderNumber}</p>
+                        </div>
+                        <button onClick={() => setIsLoadModalOpen(false)} className="p-2 bg-slate-800 rounded-full text-white"><X size={20} /></button>
                     </div>
 
-                    {/* Stops List */}
-                    <div className="space-y-4">
-                        <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest pl-1">Stops Sequence</h2>
-                        {activeTrip.orders?.map((order, idx) => {
-                            const isDelivered = order.status === 'Delivered';
-                            const isNext = !isDelivered && (idx === 0 || activeTrip.orders?.[idx - 1].status === 'Delivered');
+                    {/* ITEMS LIST (GROUPED BY LOCATION) */}
+                    <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-black">
+                        {/* Group items by Location parsed from remark "Loc: xxx" */}
+                        {(() => {
+                            const grouped: Record<string, any[]> = {};
+                            loadItems.forEach(item => {
+                                // Extract Location from Remark "Loc: X"
+                                let loc = 'Unknown Location';
+                                if (item.remark && item.remark.startsWith('Loc:')) {
+                                    loc = item.remark.replace('Loc:', '').trim();
+                                }
+                                if (!grouped[loc]) grouped[loc] = [];
+                                grouped[loc].push(item);
+                            });
 
-                            return (
-                                <div key={order.id} className={`relative p-5 rounded-2xl border transition-all ${isDelivered ? 'bg-[#1e1e24]/50 border-white/5 opacity-60' :
-                                    isNext ? 'bg-[#1e1e24] border-blue-500 shadow-lg shadow-blue-900/20 scale-[1.02] z-10' :
-                                        'bg-[#1e1e24] border-white/5 opacity-80'
-                                    }`}>
-                                    {/* Timeline Connector */}
-                                    {idx < (activeTrip.orders?.length || 0) - 1 && (
-                                        <div className="absolute left-[2.25rem] top-[4rem] bottom-[-2rem] w-0.5 bg-white/5 -z-10" />
-                                    )}
+                            return Object.entries(grouped).map(([location, items]) => (
+                                <div key={location}>
+                                    {/* Location Header */}
+                                    <div className="text-xs font-black text-blue-400 uppercase tracking-widest mb-3 border-b border-blue-500/20 pb-1">
+                                        {location}
+                                    </div>
 
-                                    <div className="flex items-start gap-4">
-                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg shrink-0 ${isDelivered ? 'bg-green-500/20 text-green-500' :
-                                            isNext ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/50' :
-                                                'bg-gray-700 text-gray-400'
-                                            }`}>
-                                            {isDelivered ? <CheckCircle size={20} /> : idx + 1}
-                                        </div>
+                                    {/* Items in this location */}
+                                    <div className="space-y-3">
+                                        {items.map((item, idx) => {
+                                            // Find original index in loadItems to update state correctly
+                                            const originalIdx = loadItems.findIndex(i => i.sku === item.sku && i.remark === item.remark); // Use SKU+Remark unique key approx
 
-                                        <div className="flex-1">
-                                            <div className="flex justify-between items-start">
-                                                <h3 className={`font-bold text-lg ${isDelivered ? 'text-gray-500 line-through' : 'text-white'}`}>{order.customer}</h3>
-                                                <span className="text-[10px] text-gray-500 font-mono">#{order.orderNumber}</span>
-                                            </div>
+                                            return (
+                                                <div key={idx} className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center gap-4">
+                                                    <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-500 font-bold border border-slate-700 text-xs">
+                                                        {idx + 1}
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <div className="text-white font-bold text-sm">{item.product}</div>
+                                                        <div className="text-[10px] text-slate-500 font-mono">Qty: {item.quantity} {item.packaging}</div>
+                                                    </div>
 
-                                            <div className="flex items-center gap-2 text-gray-400 text-sm mt-1 mb-3">
-                                                <MapPin size={14} /> {order.deliveryAddress}
-                                            </div>
-
-                                            {!isDelivered && (
-                                                <div className="grid grid-cols-2 gap-3 mt-4">
-                                                    <button
-                                                        onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.deliveryAddress || '')}`)}
-                                                        className="py-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-xs font-bold uppercase tracking-wide flex items-center justify-center gap-2"
-                                                    >
-                                                        <Navigation size={14} /> Navigate
-                                                    </button>
-                                                    <button
-                                                        onClick={() => openPOD(order)}
-                                                        className="py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase tracking-wide flex items-center justify-center gap-2 shadow-lg shadow-blue-900/40"
-                                                    >
-                                                        <PenTool size={14} /> Deliver (POD)
-                                                    </button>
+                                                    {/* Quantity Editor */}
+                                                    <div className="flex flex-col items-end gap-1">
+                                                        <input
+                                                            type="number"
+                                                            className="w-16 bg-black border border-slate-700 rounded-lg p-2 text-center text-lg font-bold text-green-400 focus:border-green-500 outline-none"
+                                                            value={loadItems[originalIdx].confirmedQty}
+                                                            onChange={(e) => {
+                                                                const newQty = parseInt(e.target.value) || 0;
+                                                                const newItems = [...loadItems];
+                                                                newItems[originalIdx].confirmedQty = newQty;
+                                                                setLoadItems(newItems);
+                                                            }}
+                                                        />
+                                                    </div>
                                                 </div>
-                                            )}
-                                        </div>
+                                            );
+                                        })}
                                     </div>
                                 </div>
-                            );
-                        })}
+                            ));
+                        })()}
                     </div>
 
-                    {/* Complete Trip Button */}
-                    {activeTrip.orders?.every(o => o.status === 'Delivered') && (
-                        <div className="fixed bottom-6 left-6 right-6">
-                            <button
-                                onClick={handleCompleteTrip}
-                                className="w-full py-4 bg-green-600 text-white rounded-2xl font-black text-lg uppercase tracking-widest shadow-2xl shadow-green-900/50 hover:scale-[1.02] transition-transform flex items-center justify-center gap-3"
-                            >
-                                <CheckCircle size={24} /> Complete Trip
-                            </button>
+                    {/* Footer */}
+                    <div className="p-4 border-t border-slate-800 bg-slate-900 space-y-3">
+                        <div className="flex justify-between text-xs font-bold text-slate-400 uppercase">
+                            <span>Total Items</span>
+                            <span className="text-white">{loadItems.reduce((acc, i) => acc + (i.confirmedQty || 0), 0)} Units</span>
                         </div>
-                    )}
-                </div>
-            ) : (
-                <div className="flex flex-col items-center justify-center p-6 text-center">
-                    <div className="bg-slate-900/50 p-6 rounded-3xl border border-slate-800 mb-6 w-full max-w-sm">
-                        <Truck size={48} className="text-slate-600 mx-auto mb-4" />
-                        <h2 className="text-xl font-bold text-white mb-2">No Active Trip</h2>
-                        <p className="text-slate-500 text-sm">
-                            You are not currently assigned to a logistics trip.
-                        </p>
-                    </div>
-                </div>
-            )}
-
-            {/* AD-HOC ORDERS SECTION */}
-            {adhocOrders.length > 0 && (
-                <div className="px-4 pb-8 space-y-4">
-                    <h2 className="text-xs font-bold text-blue-400 uppercase tracking-widest pl-1 flex items-center gap-2">
-                        <Package size={14} /> Direct Assignments
-                    </h2>
-
-                    {adhocOrders.map(order => (
-                        <div key={order.id} className="bg-[#1e1e24] border border-white/10 p-5 rounded-2xl shadow-lg relative overflow-hidden">
-                            <div className="absolute top-0 right-0 bg-blue-600 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl uppercase tracking-wider">
-                                Ad-Hoc
-                            </div>
-
-                            <div className="flex justify-between items-start mb-2">
-                                <h3 className="font-bold text-lg text-white">{order.customer}</h3>
-                            </div>
-
-                            <div className="flex items-center gap-2 text-gray-400 text-sm mb-4">
-                                <MapPin size={14} /> {order.deliveryAddress || order.zone || 'No Address'}
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3">
-                                <button
-                                    onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.deliveryAddress || '')}`)}
-                                    className="py-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-xs font-bold uppercase tracking-wide flex items-center justify-center gap-2"
-                                >
-                                    <Navigation size={14} /> Navigate
-                                </button>
-                                <button
-                                    onClick={() => openPOD(order)}
-                                    className="py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase tracking-wide flex items-center justify-center gap-2 shadow-lg shadow-blue-900/40"
-                                >
-                                    <PenTool size={14} /> Deliver
-                                </button>
-                            </div>
-
-                            {/* Items Preview */}
-                            <div className="mt-4 pt-4 border-t border-white/5 space-y-1">
-                                {order.items?.map((item, i) => (
-                                    <div key={i} className="text-[11px] text-gray-500 flex justify-between">
-                                        <span>{item.product}</span>
-                                        <span className="text-white font-mono font-bold">x{item.quantity}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
-
-            {/* POD MODAL */}
-            {isPODOpen && selectedOrder && (
-                <div className="fixed inset-0 bg-black/90 z-50 flex flex-col animate-in fade-in duration-200">
-                    <div className="flex items-center justify-between p-4 border-b border-white/10">
-                        <h2 className="font-bold text-white">Proof of Delivery</h2>
-                        <button onClick={() => setIsPODOpen(false)} className="p-2 bg-white/10 rounded-full"><X size={20} /></button>
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">1. Photo Proof (Optional)</label>
-                            <div className="border border-dashed border-white/20 rounded-xl p-6 flex flex-col items-center justify-center text-gray-400 bg-white/5">
-                                <UploadCloud size={32} className="mb-2" />
-                                <input
-                                    type="file"
-                                    accept="image/*"
-                                    capture="environment"
-                                    onChange={(e) => setPhotoFunction(e.target.files?.[0] || null)}
-                                    className="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-500"
-                                />
-                                <p className="text-[10px] mt-2 text-gray-500">Tap to take photo</p>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">2. Customer Signature</label>
-                            <div className="bg-white rounded-xl overflow-hidden h-40 touch-none">
-                                <canvas
-                                    ref={canvasRef}
-                                    className="w-full h-full cursor-crosshair"
-                                    onMouseDown={startDrawing}
-                                    onMouseUp={stopDrawing}
-                                    onMouseOut={stopDrawing}
-                                    onMouseMove={draw}
-                                    onTouchStart={startDrawing}
-                                    onTouchEnd={stopDrawing}
-                                    onTouchMove={draw}
-                                />
-                            </div>
-                            <div className="flex justify-between mt-2">
-                                <button onClick={initCanvas} className="text-xs text-red-400 font-bold uppercase">Clear Signature</button>
-                                <p className="text-[10px] text-gray-500">Sign in the white box</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="p-4 border-t border-white/10 glass-panel">
                         <button
-                            onClick={handlePODSubmit}
-                            disabled={uploading}
-                            className="w-full py-4 bg-blue-600 rounded-xl font-bold text-white uppercase tracking-wider flex items-center justify-center gap-2 disabled:opacity-50"
+                            onClick={handleConfirmLoad}
+                            disabled={submitting}
+                            className="w-full py-4 bg-green-600 hover:bg-green-500 text-white rounded-xl font-black text-lg uppercase tracking-widest shadow-lg shadow-green-900/40 disabled:opacity-50 disabled:grayscale transition-all active:scale-95 flex items-center justify-center gap-2"
                         >
-                            {uploading ? 'Uploading...' : 'Confirm Delivery'}
+                            {submitting ? 'PROCESSING...' : 'CONFIRM & DEDUCT STOCK'}
                         </button>
                     </div>
                 </div>

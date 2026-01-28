@@ -6,6 +6,7 @@ import JobOrders from './pages/JobOrders';
 import ProductionLog from './pages/ProductionLog';
 import Inventory from './pages/Inventory';
 import Login from './pages/Login';
+import Register from './pages/Register';
 
 import ProductionControl from './pages/ProductionControl';
 // import ProductionPlanning from './pages/ProductionPlanning';
@@ -14,6 +15,7 @@ import RecipeManager from './pages/RecipeManager';
 import ProductLibrary from './pages/ProductLibrary';
 import DeliveryOrderManagement from './pages/DeliveryOrderManagement';
 import DriverDelivery from './pages/DriverDelivery';
+import DriverHistory from './pages/DriverHistory';
 import Dispatch from './pages/Dispatch';
 import LoadingDock from './pages/LoadingDock';
 import MachineLabels from './pages/MachineLabels';
@@ -27,6 +29,7 @@ import CustomerImport from './pages/CustomerImport'; // Added Import Page
 import UniversalIntake from './pages/UniversalIntake';
 import FactoryDashboard from './pages/FactoryDashboard';
 import SimpleStock from './pages/SimpleStock';
+import UserManagement from './pages/UserManagement';
 
 import { User, UserRole, InventoryItem, ProductionLog as ProductionLogType, JobOrder } from './types';
 import AIAgentWidget from './components/AIAgentWidget';
@@ -131,7 +134,7 @@ function App() {
             'SuperAdmin': ['*'], // The Only One with Full Access
             'Admin': ['profile', 'construction', 'factory-dashboard', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'dispatch', 'loading-dock', 'production', 'report-history', 'users', 'hr', 'claims', 'simple-stock'],
             'Manager': ['profile', 'construction', 'factory-dashboard', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'dispatch', 'loading-dock', 'production', 'report-history', 'hr', 'claims', 'simple-stock'],
-            'Driver': ['delivery-driver', 'claims', 'profile'],
+            'Driver': ['delivery-driver', 'delivery-history', 'claims', 'profile'],
             'Operator': ['scanner', 'profile'],
             'Device': ['scanner'],
             'HR': ['profile', 'construction'],
@@ -551,7 +554,21 @@ function App() {
     }
 
     if (!isLoggedIn) {
-        return <Login onLogin={handleLogin} />;
+        if (activePage === 'register') {
+            return (
+                <ErrorBoundary>
+                    <Register onNavigate={setActivePage} />
+                </ErrorBoundary>
+            );
+        }
+        return (
+            <ErrorBoundary>
+                <Login
+                    onLogin={handleLogin}
+                    onNavigate={setActivePage}
+                />
+            </ErrorBoundary>
+        );
     }
 
     // Machine Check-In (DISABLED per user request "delete shift")
@@ -583,6 +600,8 @@ function App() {
                 return <DeliveryOrderManagement />;
             case 'delivery-driver':
                 return <DriverDelivery user={user} />;
+            case 'delivery-history':
+                return <DriverHistory user={user} />;
             case 'dispatch':
                 return <Dispatch />;
             case 'loading-dock':
@@ -599,7 +618,7 @@ function App() {
                 return <ExecutiveReports user={user} />;
             // Organization
             case 'users':
-                return <DataManagement />; // Temporary mapping
+                return <UserManagement currentUser={user} />;
             case 'hr':
                 return <UnderConstruction title="HR Portal" />;
             case 'simple-stock': // Added
@@ -614,8 +633,7 @@ function App() {
                 return <UniversalIntake />;
             case 'factory-dashboard':
                 return <FactoryDashboard />;
-            case 'simple-stock':
-                return <SimpleStock />;
+
             case 'construction':
                 return <UnderConstruction title="Access Restricted" />;
             default:
