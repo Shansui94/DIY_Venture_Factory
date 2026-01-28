@@ -219,11 +219,11 @@ const DeliveryOrderManagement: React.FC = () => {
         if (entryMode === 'search') {
             if (!selectedV2Item) return alert("Please select a product.");
 
-            // Stock Check
-            const currentStock = stockMap[selectedV2Item.sku] || 0;
-            if (currentItemQty > currentStock) {
-                if (!window.confirm(`⚠️ Insufficient Stock!\nAvailable: ${currentStock}\nProceed anyway?`)) return;
-            }
+            // Stock Check REMOVED
+            // const currentStock = stockMap[selectedV2Item.sku] || 0;
+            // if (currentItemQty > currentStock) {
+            //    if (!window.confirm(`⚠️ Insufficient Stock!\nAvailable: ${currentStock}\nProceed anyway?`)) return;
+            // }
 
             newItem = {
                 product: selectedV2Item.name,
