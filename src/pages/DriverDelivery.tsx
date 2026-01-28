@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../services/supabase';
-import { Truck, MapPin, CheckCircle, Navigation, Package, User, Calendar, Camera, PenTool, X, UploadCloud } from 'lucide-react';
+import { Truck, MapPin, CheckCircle, Navigation, Package, User, PenTool, X, UploadCloud } from 'lucide-react';
 import { LogisticsTrip, SalesOrder } from '../types';
 
 interface DriverDeliveryProps {
@@ -10,7 +10,7 @@ interface DriverDeliveryProps {
 const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
     // Mode: 'Trip' (New) or 'Legacy' (Fallback)
     const [activeTrip, setActiveTrip] = useState<LogisticsTrip | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [adhocOrders, setAdhocOrders] = useState<SalesOrder[]>([]);
 
     // POD State
     const [selectedOrder, setSelectedOrder] = useState<SalesOrder | null>(null);
@@ -24,7 +24,6 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
     const isDrawing = useRef(false);
 
     const fetchData = async () => {
-        setLoading(true);
         try {
             if (!user?.uid) return;
 
@@ -51,14 +50,27 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                     orders: orders || [],
                     vehicle: tripData.sys_vehicles
                 });
-            } else {
                 setActiveTrip(null);
+            }
+
+            // 2. Fetch Ad-hoc Orders (Direct Assignments)
+            const { data: directOrders } = await supabase
+                .from('sales_orders')
+                .select('*')
+                .eq('driver_id', user.uid)
+                .is('trip_id', null)
+                .neq('status', 'Delivered') // Hide delivered ones from main view? or show recent?
+                .neq('status', 'Cancelled')
+                .order('created_at', { ascending: false });
+
+            if (directOrders) {
+                setAdhocOrders(directOrders);
             }
 
         } catch (error) {
             console.error("Driver Load Error:", error);
         } finally {
-            setLoading(false);
+            // setLoading(false);
         }
     };
 
@@ -137,7 +149,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
 
             // Upload Photo if exists
             if (photoFunction) {
-                const fileName = `pod/${selectedOrder.id}/${Date.now()}.jpg`;
+                // const fileName = `pod/${selectedOrder.id}/${Date.now()}.jpg`;
                 // Mock Upload for MVP (or real if bucket exists). 
                 // Assuming no storage bucket 'pod' configured yet. 
                 // We'll skip actual upload to bucket and use a placeholder or dataURL if small
@@ -235,8 +247,8 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
 
                             return (
                                 <div key={order.id} className={`relative p-5 rounded-2xl border transition-all ${isDelivered ? 'bg-[#1e1e24]/50 border-white/5 opacity-60' :
-                                        isNext ? 'bg-[#1e1e24] border-blue-500 shadow-lg shadow-blue-900/20 scale-[1.02] z-10' :
-                                            'bg-[#1e1e24] border-white/5 opacity-80'
+                                    isNext ? 'bg-[#1e1e24] border-blue-500 shadow-lg shadow-blue-900/20 scale-[1.02] z-10' :
+                                        'bg-[#1e1e24] border-white/5 opacity-80'
                                     }`}>
                                     {/* Timeline Connector */}
                                     {idx < (activeTrip.orders?.length || 0) - 1 && (
@@ -245,8 +257,8 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
 
                                     <div className="flex items-start gap-4">
                                         <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg shrink-0 ${isDelivered ? 'bg-green-500/20 text-green-500' :
-                                                isNext ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/50' :
-                                                    'bg-gray-700 text-gray-400'
+                                            isNext ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/50' :
+                                                'bg-gray-700 text-gray-400'
                                             }`}>
                                             {isDelivered ? <CheckCircle size={20} /> : idx + 1}
                                         </div>
@@ -297,12 +309,64 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                     )}
                 </div>
             ) : (
-                <div className="flex flex-col items-center justify-center h-[60vh] text-center p-6">
-                    <Truck size={64} className="text-gray-600 mb-6" />
-                    <h2 className="text-xl font-bold text-white mb-2">No Active Trip</h2>
-                    <p className="text-gray-500 max-w-xs">
-                        You don't have any active trips assigned. Wait for dispatch or check with the logistics manager.
-                    </p>
+                <div className="flex flex-col items-center justify-center p-6 text-center">
+                    <div className="bg-slate-900/50 p-6 rounded-3xl border border-slate-800 mb-6 w-full max-w-sm">
+                        <Truck size={48} className="text-slate-600 mx-auto mb-4" />
+                        <h2 className="text-xl font-bold text-white mb-2">No Active Trip</h2>
+                        <p className="text-slate-500 text-sm">
+                            You are not currently assigned to a logistics trip.
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {/* AD-HOC ORDERS SECTION */}
+            {adhocOrders.length > 0 && (
+                <div className="px-4 pb-8 space-y-4">
+                    <h2 className="text-xs font-bold text-blue-400 uppercase tracking-widest pl-1 flex items-center gap-2">
+                        <Package size={14} /> Direct Assignments
+                    </h2>
+
+                    {adhocOrders.map(order => (
+                        <div key={order.id} className="bg-[#1e1e24] border border-white/10 p-5 rounded-2xl shadow-lg relative overflow-hidden">
+                            <div className="absolute top-0 right-0 bg-blue-600 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl uppercase tracking-wider">
+                                Ad-Hoc
+                            </div>
+
+                            <div className="flex justify-between items-start mb-2">
+                                <h3 className="font-bold text-lg text-white">{order.customer}</h3>
+                            </div>
+
+                            <div className="flex items-center gap-2 text-gray-400 text-sm mb-4">
+                                <MapPin size={14} /> {order.deliveryAddress || order.zone || 'No Address'}
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <button
+                                    onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.deliveryAddress || '')}`)}
+                                    className="py-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-xs font-bold uppercase tracking-wide flex items-center justify-center gap-2"
+                                >
+                                    <Navigation size={14} /> Navigate
+                                </button>
+                                <button
+                                    onClick={() => openPOD(order)}
+                                    className="py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase tracking-wide flex items-center justify-center gap-2 shadow-lg shadow-blue-900/40"
+                                >
+                                    <PenTool size={14} /> Deliver
+                                </button>
+                            </div>
+
+                            {/* Items Preview */}
+                            <div className="mt-4 pt-4 border-t border-white/5 space-y-1">
+                                {order.items?.map((item, i) => (
+                                    <div key={i} className="text-[11px] text-gray-500 flex justify-between">
+                                        <span>{item.product}</span>
+                                        <span className="text-white font-mono font-bold">x{item.quantity}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
                 </div>
             )}
 

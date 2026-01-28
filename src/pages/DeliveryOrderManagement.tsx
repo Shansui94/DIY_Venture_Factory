@@ -4,9 +4,9 @@ import { getRecommendedPackaging } from '../utils/packagingRules';
 import { getV2Items } from '../services/apiV2';
 import { determineZone, findBestFactory } from '../utils/logistics';
 import {
-    Plus, Search, Calendar, FileText, X, Truck, Package,
-    User as UserIcon, ListFilter, Box, Sparkles, Upload,
-    ChevronRight, MapPin, AlertCircle
+    Plus, Search, Calendar, FileText, X, Truck,
+    User as UserIcon, ListFilter, Box, Sparkles,
+
 } from 'lucide-react';
 import {
     SalesOrder,
@@ -28,7 +28,7 @@ const DeliveryOrderManagement: React.FC = () => {
     // --- STATE ---
     const [orders, setOrders] = useState<SalesOrder[]>([]);
     const [drivers, setDrivers] = useState<User[]>([]);
-    const [loading, setLoading] = useState(true);
+
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('All');
@@ -95,7 +95,7 @@ const DeliveryOrderManagement: React.FC = () => {
 
     // Fetch Data
     const fetchData = async () => {
-        setLoading(true);
+
         try {
             const [usersRes, ordersRes, itemsRes, customersRes] = await Promise.all([
                 supabase.from('users_public').select('*').eq('role', 'Driver'),
@@ -135,8 +135,6 @@ const DeliveryOrderManagement: React.FC = () => {
             }
         } catch (err) {
             console.error("System Error:", err);
-        } finally {
-            setLoading(false);
         }
     };
 
@@ -723,7 +721,7 @@ const DeliveryOrderManagement: React.FC = () => {
 };
 
 // Start Icon helper needed for V2 items check mark
-import { Check } from 'lucide-react';
+
 function CheckCircle({ size, className }: { size?: number, className?: string }) {
     return <div className={`rounded-full border flex items-center justify-center ${className}`} style={{ width: size, height: size }}>✓</div>;
 }

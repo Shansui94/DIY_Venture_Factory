@@ -6,6 +6,7 @@ import JobOrders from './pages/JobOrders';
 import ProductionLog from './pages/ProductionLog';
 import Inventory from './pages/Inventory';
 import Login from './pages/Login';
+
 import ProductionControl from './pages/ProductionControl';
 // import ProductionPlanning from './pages/ProductionPlanning';
 import LiveStock from './pages/LiveStock';
@@ -25,6 +26,7 @@ import UpdatePassword from './pages/UpdatePassword';
 import CustomerImport from './pages/CustomerImport'; // Added Import Page
 import UniversalIntake from './pages/UniversalIntake';
 import FactoryDashboard from './pages/FactoryDashboard';
+import SimpleStock from './pages/SimpleStock';
 
 import { User, UserRole, InventoryItem, ProductionLog as ProductionLogType, JobOrder } from './types';
 import AIAgentWidget from './components/AIAgentWidget';
@@ -105,6 +107,9 @@ function App() {
             if (hash === '#/factory-dashboard') {
                 setActivePage('factory-dashboard');
             }
+            if (hash === '#/simple-stock') {
+                setActivePage('simple-stock');
+            }
         };
 
         handleHash();
@@ -124,8 +129,8 @@ function App() {
         // Define allowable pages per role
         const allowedPages: Record<string, string[]> = {
             'SuperAdmin': ['*'], // The Only One with Full Access
-            'Admin': ['profile', 'construction', 'factory-dashboard', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'dispatch', 'loading-dock', 'production', 'report-history', 'users', 'hr', 'claims'],
-            'Manager': ['profile', 'construction', 'factory-dashboard', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'dispatch', 'loading-dock', 'production', 'report-history', 'hr', 'claims'],
+            'Admin': ['profile', 'construction', 'factory-dashboard', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'dispatch', 'loading-dock', 'production', 'report-history', 'users', 'hr', 'claims', 'simple-stock'],
+            'Manager': ['profile', 'construction', 'factory-dashboard', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'dispatch', 'loading-dock', 'production', 'report-history', 'hr', 'claims', 'simple-stock'],
             'Driver': ['delivery-driver', 'claims', 'profile'],
             'Operator': ['scanner', 'profile'],
             'Device': ['scanner'],
@@ -483,13 +488,16 @@ function App() {
     // ... (existing imports)
 
     const handleCreateJob = async (newJobData: Partial<JobOrder>) => {
-        const jobId = `JOB-${Date.now().toString().slice(-4)}`;
+        // DB expects UUID for job_id
+        const uuid = self.crypto.randomUUID();
+        const friendlyId = `JOB-${Date.now().toString().slice(-4)}`;
+
         // Determine Zone automatically if location/address is provided
         const address = newJobData.deliveryAddress || (newJobData as any).location || '';
         const autoZone = determineZone(address);
 
         const newJob = {
-            job_id: jobId,
+            job_id: uuid, // Fixed: Must be UUID
             customer: newJobData.customer || 'Unknown',
             product: newJobData.product || 'Unknown',
             target_qty: Number(newJobData.target) || 0,
@@ -500,15 +508,19 @@ function App() {
             delivery_zone: autoZone,
             delivery_status: 'Pending',
             order_index: 9999,
-            created_at: new Date().toISOString()
+            created_at: new Date().toISOString(),
+            // New Fields for Feed
+            type: newJobData.type || 'Production',
+            notes: newJobData.notes || '',
+            original_text: newJobData.originalText || ''
         };
 
         try {
             const { error } = await supabase.from('job_orders').insert(newJob);
             if (error) throw error;
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error creating job:", error);
-            alert("Failed to create job");
+            alert("Failed to create job: " + (error.message || JSON.stringify(error)));
         }
     };
 
@@ -590,6 +602,8 @@ function App() {
                 return <DataManagement />; // Temporary mapping
             case 'hr':
                 return <UnderConstruction title="HR Portal" />;
+            case 'simple-stock': // Added
+                return <SimpleStock />;
             case 'claims':
                 return <ClaimsManagement user={user} />;
             case 'update-password':
@@ -600,6 +614,8 @@ function App() {
                 return <UniversalIntake />;
             case 'factory-dashboard':
                 return <FactoryDashboard />;
+            case 'simple-stock':
+                return <SimpleStock />;
             case 'construction':
                 return <UnderConstruction title="Access Restricted" />;
             default:

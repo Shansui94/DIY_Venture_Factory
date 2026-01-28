@@ -7,7 +7,6 @@
 #include <time.h>         // Include standard time library
 #include <vector>
 
-
 #define WDT_TIMEOUT 30 // Restart if stuck for 30 seconds
 
 // --- WIFI CONFIGURATION (Change This) ---
@@ -24,7 +23,7 @@ const char *apiKey =
     "M4dvKPzHBDkiydwosUYPs-8";
 
 // --- MACHINE CONFIGURATION ---
-const char *machineId = "T1.2-M01"; // Machine ID (Corrected to M01)
+const char *machineId = "T1.3-M03"; // Machine ID (Updated for T1.3-M03)
 const int relayPin = 15;            // GPIO 15 (D15)
 const int ledPin = 2;               // Built-in LED (GPIO 2)
 
@@ -51,7 +50,7 @@ const int daylightOffset_sec = 0;
 Preferences preferences;
 
 void saveQueue() {
-  preferences.begin("queue", false); // Namespace "queue", RW mode
+  preferences.begin("fv_store", false); // Namespace "fv_store", RW mode
   int size = alarmQueue.size();
   preferences.putInt("size", size);
 
@@ -69,7 +68,7 @@ void saveQueue() {
 }
 
 void loadQueue() {
-  preferences.begin("queue", true); // Read Only
+  preferences.begin("fv_store", true); // Read Only
   int size = preferences.getInt("size", 0);
 
   if (size > 0) {
@@ -105,6 +104,12 @@ void setup() {
 
   // Load unsent data from Flash (Crash Recovery)
   loadQueue();
+
+  // DIAGNOSTIC: Queue a "Boot Signal" (Count 0)
+  // This helps us see if the device is rebooting frequently.
+  QueueItem bootItem = {0, 0};
+  alarmQueue.push_back(bootItem);
+  saveQueue();
 
   // Initialize Watchdog Timer (ESP32 Arduino 3.0+ / IDF 5.x compatible)
   esp_task_wdt_config_t wdt_config = {.timeout_ms = WDT_TIMEOUT * 1000,
@@ -187,18 +192,22 @@ void loop() {
       Serial.println("Signal Detected! verifying signal stability (1 sec)...");
 
       // OPTIMIZED NOISE FILTER (STABILITY CHECK)
-      // REDUCED STRICTNESS: Check 15 times (300ms) instead of 50 times (1s).
-      // Why? A 1-second perfect signal requirement is too strict for mechanical
-      // relays. 300ms is still plenty to filter out electrical noise (<50ms).
-      bool isStable = true;
-      for (int i = 0; i < 15; i++) {
+      // USER CUSTOM: Check 5 times (100ms). Threshold 60% (3/5).
+      int validCount = 0;
+      int totalChecks = 5;
+
+      for (int i = 0; i < totalChecks; i++) {
         delay(20);
-        esp_task_wdt_reset(); // Keep dog fed during delay loop
-        if (digitalRead(relayPin) == HIGH) {
-          isStable = false;
-          break;
+        esp_task_wdt_reset();               // Keep dog fed
+        if (digitalRead(relayPin) == LOW) { // LOW is Active
+          validCount++;
         }
       }
+
+      // If 60% or more (>=3) were valid, we accept it.
+      bool isStable = (validCount >= 3);
+      Serial.printf("Stability Check: %d/%d valid. Result: %s\n", validCount,
+                    totalChecks, isStable ? "PASS" : "FAIL");
 
       if (isStable) {
         Serial.println("ALARM CONFIRMED! queueing...");
@@ -218,7 +227,7 @@ void loop() {
         // We logic: if now < 2020, mark as 0, send logic will use upload time
         // if 0. But better is to try to sync.
 
-        QueueItem item = {2, now}; // Count=2, Time=Now
+        QueueItem item = {1, now}; // Count=1, Time=Now
         alarmQueue.push_back(item);
 
         saveQueue(); // <--- SAVE TO FLASH IMMEDIATELY

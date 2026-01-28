@@ -70,6 +70,11 @@ export interface JobOrder {
     deliveryStatus?: DeliveryStatus;
     driverId?: string; // ID of the assigned Lorry/Driver
     orderIndex?: number; // For Kanban ordering
+
+    // Feed / Chat Fields
+    type?: 'Production' | 'Maintenance' | 'System' | 'Note'; // Default 'Production'
+    originalText?: string; // The raw text entered by user
+    created_at?: string; // Timestamp
 }
 
 // 13. Sales Order (NEW)
@@ -87,13 +92,15 @@ export interface SalesOrder {
         quantity: number; // Rolls
         remark?: string; // NEW: Remark field
     }[];
-    status: 'New' | 'Planned' | 'In-Production' | 'Ready-to-Ship' | 'Shipped';
+    status: 'New' | 'Planned' | 'In-Production' | 'Ready-to-Ship' | 'Shipped' | 'Delivered' | 'Cancelled';
     orderDate: string;
     deadline: string;
     notes?: string;
     totalAmount?: number; // Optional for now
     driverId?: string; // NEW: Assigned Driver ID
     driverName?: string; // NEW: Resolved Driver Name for display
+    deliveryAddress?: string; // Mapped from delivery_address
+    zone?: string; // Mapped from zone
 
     // Logistics V2
     trip_id?: string;

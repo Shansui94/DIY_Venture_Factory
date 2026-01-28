@@ -24,7 +24,8 @@ async function checkRange() {
     // We can rely on ISO strings. 
     // 2026-01-26 01:30:00 +08:00 -> 2026-01-25 17:30:00 UTC
 
-    const startISO = '2026-01-25T17:30:00.000Z'; // 1:30 AM UTC+8
+    // Target Start: 2026-01-26 10:00:00 (MYT) -> 02:00:00 UTC
+    const startISO = '2026-01-26T02:00:00.000Z'; // 10:00 AM UTC+8
     const endISO = new Date().toISOString();
 
     console.log(`Checking logs from UTC: ${startISO} to ${endISO}`);

@@ -8,6 +8,10 @@ interface MachineStats {
     last_seen: string;
     status: 'Online' | 'Offline';
     current_product?: string;
+    // New Health Stats
+    reboot_count: number;
+    gap_count: number;
+    health_status: 'Healthy' | 'Warning' | 'Critical';
 }
 
 const FactoryDashboard = () => {
@@ -74,8 +78,8 @@ const FactoryDashboard = () => {
                 Object.keys(updated).forEach(key => {
                     const machine = updated[key];
                     const lastSeenTime = new Date(machine.last_seen).getTime();
-                    // If no signal for 2 minutes, consider offline
-                    if (now - lastSeenTime > 120000 && machine.status === 'Online') {
+                    // If no signal for 6 minutes, consider offline
+                    if (now - lastSeenTime > 360000 && machine.status === 'Online') {
                         updated[key] = { ...machine, status: 'Offline' };
                         converted = true;
                     }
@@ -101,7 +105,7 @@ const FactoryDashboard = () => {
             .from('production_logs')
             .select('*')
             .gte('created_at', todayISO)
-            .order('created_at', { ascending: false });
+            .order('created_at', { ascending: true }); // ASC for gap check
 
         if (error) {
             console.error('Error fetching initial logs:', error);
@@ -110,32 +114,74 @@ const FactoryDashboard = () => {
 
         const stats: { [key: string]: MachineStats } = {};
 
-        // Aggregate logs for today
-        data.forEach(log => {
-            if (!stats[log.machine_id]) {
-                stats[log.machine_id] = {
-                    machine_id: log.machine_id,
+        // Helper to process a machine if not exists
+        const getStats = (id: string) => {
+            if (!stats[id]) {
+                stats[id] = {
+                    machine_id: id,
                     total_count: 0,
-                    last_seen: log.created_at,
+                    last_seen: todayISO, // Default start
                     status: 'Offline',
-                    current_product: log.product_sku
+                    current_product: undefined,
+                    reboot_count: 0,
+                    gap_count: 0,
+                    health_status: 'Healthy'
                 };
             }
-            stats[log.machine_id].total_count += (log.alarm_count || 1);
+            return stats[id];
+        }
 
-            // Keep the most recent product SKU
-            if (new Date(log.created_at) >= new Date(stats[log.machine_id].last_seen)) {
-                stats[log.machine_id].last_seen = log.created_at;
-                if (log.product_sku) stats[log.machine_id].current_product = log.product_sku;
+        // Aggregate logs for today
+        const lastLogTime: { [key: string]: number } = {};
+
+        data.forEach(log => {
+            const m = getStats(log.machine_id);
+            const logTime = new Date(log.created_at).getTime();
+
+            // 1. Count
+            if (log.alarm_count > 0) {
+                m.total_count += log.alarm_count;
+            } else if (log.alarm_count === 0) {
+                // Reboot Signal
+                m.reboot_count++;
+            }
+
+            // 2. Gap Detection (>10 mins)
+            if (lastLogTime[log.machine_id]) {
+                const diffMins = (logTime - lastLogTime[log.machine_id]) / 60000;
+                if (diffMins > 10) {
+                    m.gap_count++;
+                }
+            }
+            lastLogTime[log.machine_id] = logTime;
+
+            // 3. Update Last Seen & Product
+            if (logTime >= new Date(m.last_seen).getTime()) {
+                m.last_seen = log.created_at;
+                if (log.product_sku) m.current_product = log.product_sku;
             }
         });
 
-        // Determine status based on recentness (e.g., within last 5 mins)
+        // Determine Final Status
         const now = new Date().getTime();
         Object.keys(stats).forEach(key => {
-            const timeDiff = now - new Date(stats[key].last_seen).getTime();
-            if (timeDiff < 300000) { // 5 mins
-                stats[key].status = 'Online';
+            const m = stats[key];
+            const timeDiff = now - new Date(m.last_seen).getTime();
+
+            // Online/Offline
+            if (timeDiff < 360000) { // 6 mins
+                m.status = 'Online';
+            } else {
+                m.status = 'Offline';
+            }
+
+            // Health Status
+            if (m.reboot_count > 5 || m.gap_count > 5) {
+                m.health_status = 'Critical';
+            } else if (m.reboot_count > 0 || m.gap_count > 0) {
+                m.health_status = 'Warning';
+            } else {
+                m.health_status = 'Healthy';
             }
         });
 
@@ -149,8 +195,23 @@ const FactoryDashboard = () => {
                 total_count: 0,
                 last_seen: new Date().toISOString(),
                 status: 'Online',
-                current_product: log.product_sku
+                current_product: log.product_sku, // fallback
+                reboot_count: 0,
+                gap_count: 0,
+                health_status: 'Healthy'
             };
+
+            const newReboot = (log.alarm_count === 0) ? current.reboot_count + 1 : current.reboot_count;
+
+            // Should check gap (requires prev log time... simplified here for realtime)
+            const now = new Date().getTime();
+            const last = new Date(current.last_seen).getTime();
+            const diff = (now - last) / 60000;
+            const newGap = (diff > 10) ? current.gap_count + 1 : current.gap_count;
+
+            let health: 'Healthy' | 'Warning' | 'Critical' = 'Healthy';
+            if (newReboot > 5 || newGap > 5) health = 'Critical';
+            else if (newReboot > 0 || newGap > 0) health = 'Warning';
 
             return {
                 ...prev,
@@ -159,7 +220,10 @@ const FactoryDashboard = () => {
                     total_count: current.total_count + (log.alarm_count || 1),
                     last_seen: log.created_at || new Date().toISOString(),
                     status: 'Online',
-                    current_product: log.product_sku || current.current_product
+                    current_product: log.product_sku || current.current_product,
+                    reboot_count: newReboot,
+                    gap_count: newGap,
+                    health_status: health
                 }
             };
         });
@@ -170,7 +234,7 @@ const FactoryDashboard = () => {
             <header className="mb-8 flex justify-between items-center">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-800">Factory Dashboard</h1>
-                    <p className="text-gray-500">Real-time Production Monitoring</p>
+                    <p className="text-gray-500">Real-time Production & Health Monitoring</p>
                 </div>
                 <div className="text-sm text-gray-400">
                     Last Check: {new Date(lastUpdate).toLocaleTimeString()}
@@ -184,16 +248,26 @@ const FactoryDashboard = () => {
                         className={`bg-white rounded-xl shadow-sm p-6 border-l-4 transition-all duration-300 ${machine.status === 'Online' ? 'border-green-500 shadow-md ring-2 ring-green-50' : 'border-gray-300 opacity-80'
                             }`}
                     >
+                        {/* Header: ID + Status */}
                         <div className="flex justify-between items-start mb-4">
                             <h2 className="text-xl font-bold text-gray-700">
                                 {machine.machine_id}
                             </h2>
-                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${machine.status === 'Online'
-                                ? 'bg-green-100 text-green-700 animate-pulse'
-                                : 'bg-gray-100 text-gray-500'
-                                }`}>
-                                {machine.status.toUpperCase()}
-                            </span>
+                            <div className="flex flex-col items-end gap-1">
+                                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${machine.status === 'Online'
+                                    ? 'bg-green-100 text-green-700 animate-pulse'
+                                    : 'bg-gray-100 text-gray-500'
+                                    }`}>
+                                    {machine.status.toUpperCase()}
+                                </span>
+                                {/* Health Badge */}
+                                {machine.health_status !== 'Healthy' && (
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${machine.health_status === 'Critical' ? 'bg-red-100 text-red-600' : 'bg-yellow-100 text-yellow-600'
+                                        }`}>
+                                        {machine.health_status}
+                                    </span>
+                                )}
+                            </div>
                         </div>
 
                         {/* DISPLAY ACTIVE PRODUCTS (Dual Lane Support) */}
@@ -216,13 +290,32 @@ const FactoryDashboard = () => {
                             )}
                         </div>
 
-                        <div className="flex items-baseline gap-2 mb-2">
-                            <span className="text-5xl font-extrabold text-gray-900">
-                                {machine.total_count}
-                            </span>
-                            <span className="text-gray-400 font-medium">units</span>
+                        {/* Stats Grid */}
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <div className="text-xs text-gray-400 font-medium">Production</div>
+                                <div className="flex items-baseline gap-1">
+                                    <span className="text-3xl font-extrabold text-gray-900">
+                                        {machine.total_count}
+                                    </span>
+                                    <span className="text-xs text-gray-400">units</span>
+                                </div>
+                            </div>
+
+                            {/* Health Stats */}
+                            <div className="flex flex-col justify-center gap-1 border-l pl-4 border-gray-100">
+                                <div className={`text-xs flex justify-between ${machine.gap_count > 0 ? 'text-red-500 font-bold' : 'text-gray-400'}`}>
+                                    <span>Gaps:</span>
+                                    <span>{machine.gap_count}</span>
+                                </div>
+                                <div className={`text-xs flex justify-between ${machine.reboot_count > 0 ? 'text-orange-500 font-bold' : 'text-gray-400'}`}>
+                                    <span>Reboots:</span>
+                                    <span>{machine.reboot_count}</span>
+                                </div>
+                            </div>
                         </div>
 
+                        {/* Footer */}
                         <div className="mt-4 pt-4 border-t border-gray-100 text-xs text-gray-400 flex justify-between">
                             <span>Last Signal:</span>
                             <span className="font-mono">
@@ -245,5 +338,4 @@ const FactoryDashboard = () => {
         </div >
     );
 };
-
 export default FactoryDashboard;

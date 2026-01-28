@@ -11,8 +11,6 @@ import {
     Menu,
     X,
     Scan,
-    BookOpen,
-    DollarSign,
     Truck,
     Package,
     FileCheck,
@@ -139,6 +137,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                 <NavGroup title="Operations">
                                     <NavItem id="scanner" icon={Scan} label="Production Control" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="jobs" icon={ClipboardList} label="Job Orders" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="simple-stock" icon={Truck} label="Quick Stock Out" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="livestock" icon={BarChart3} label="Live Stock" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 </NavGroup>
 

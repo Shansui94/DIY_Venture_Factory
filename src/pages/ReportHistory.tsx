@@ -2,354 +2,294 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
 import { User, ProductionLog } from '../types';
 import { generateSessionReport } from '../utils/reportGenerator';
-import { FileText, Download, Calendar, Loader } from 'lucide-react';
+import { FileText, Download, Calendar, Loader, ChevronLeft, ChevronRight, Activity, PowerOff } from 'lucide-react';
+import { FACTORIES, MACHINES } from '../data/factoryData';
 
 interface ReportHistoryProps {
     user: User | null;
 }
 
-interface SessionKey {
-    date: string;
-    operatorId: string;
-    operatorName: string;
-    operatorEmail: string;
+interface MachineDailySummary {
+    machineId: string;
+    machineName: string;
+    totalQty: number;
+    logCount: number;
+    avgSpeed: number;
+    logs: ProductionLog[];
+    operatorName: string; // Main operator or 'Multiple'
 }
 
 const ReportHistory: React.FC<ReportHistoryProps> = ({ user }) => {
     const [loading, setLoading] = useState(true);
-    const [sessions, setSessions] = useState<{ key: SessionKey, logs: ProductionLog[] }[]>([]);
-    const [viewMode, setViewMode] = useState<'mine' | 'all'>('all');
+    const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+    const [dailyData, setDailyData] = useState<Record<string, MachineDailySummary>>({}); // Map<MachineID, Summary>
 
-    // Auth Check
-    // Boss (001) OR Admin role can see all reports
-    const isBoss = user?.employeeId === '001' || user?.role === 'Admin';
+    const [selectedSummary, setSelectedSummary] = useState<MachineDailySummary | null>(null);
 
     useEffect(() => {
         if (!user) return;
-        // Default to 'mine' if not boss, 'all' if boss
-        if (!isBoss) setViewMode('mine');
-        fetchHistory();
-    }, [user, viewMode]);
+        fetchDailyLogs();
+    }, [user, selectedDate]);
 
-    const fetchHistory = async () => {
+    const fetchDailyLogs = async () => {
         setLoading(true);
-        if (!user) {
-            setLoading(false);
-            return;
-        }
-
         try {
-            let mySystemId: string | null = null;
-            const authId = user.uid;
-            const { data: profile } = await supabase
-                .from('sys_users_v2')
-                .select('id, employee_id, name')
-                .eq('auth_user_id', authId)
-                .single();
-
-            if (profile) mySystemId = profile.id;
-
+            // Get User Map for Operator display
             let userMap: Record<string, any> = {};
-            if (viewMode === 'all') {
-                const { data: allUsers } = await supabase.from('sys_users_v2').select('id, name, email, employee_id');
-                if (allUsers) allUsers.forEach(u => { userMap[u.id] = u; });
-            } else {
-                if (mySystemId && profile) userMap[mySystemId] = profile;
-            }
+            const { data: allUsers } = await supabase.from('sys_users_v2').select('id, name, email');
+            if (allUsers) allUsers.forEach(u => { userMap[u.id] = u; });
 
-            // PAGINATION LOGIC
-            // Supabase API limits to 1000 rows per request by default.
-            // We must loop to fetch all data within our date range (30 days).
+            // Fetch Logs for selected Date
+            const startOfDay = new Date(selectedDate);
+            startOfDay.setHours(0, 0, 0, 0);
+            const endOfDay = new Date(selectedDate);
+            endOfDay.setHours(23, 59, 59, 999);
 
-            let allLogs: any[] = [];
-            let page = 0;
-            const pageSize = 1000;
-            let hasMore = true;
+            const { data: logs, error } = await supabase
+                .from('production_logs')
+                .select('*')
+                .gte('created_at', startOfDay.toISOString())
+                .lte('created_at', endOfDay.toISOString())
+                .order('created_at', { ascending: false });
 
-            // Default: Last 30 Days
-            const thirtyDaysAgo = new Date();
-            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-            const dateFilter = thirtyDaysAgo.toISOString();
+            if (error) throw error;
 
-            while (hasMore) {
-                let query = supabase
-                    .from('production_logs')
-                    .select('*')
-                    .order('created_at', { ascending: false })
-                    .range(page * pageSize, (page + 1) * pageSize - 1)
-                    .gte('created_at', dateFilter);
+            // Process Logs into Machine Summaries
+            const summaryMap: Record<string, MachineDailySummary> = {};
 
-                if (viewMode === 'mine') {
-                    if (mySystemId) {
-                        query = query.eq('operator_id', mySystemId);
-                    } else {
-                        break; // Should not happen
-                    }
-                }
+            logs?.forEach((log: any) => {
+                const machineId = log.machine_id || log.job_id;
+                if (!machineId) return;
 
-                const { data, error } = await query;
-
-                if (error) {
-                    console.error("Error fetching history page " + page, error);
-                    break;
-                }
-
-                if (data && data.length > 0) {
-                    allLogs = [...allLogs, ...data];
-                    if (data.length < pageSize) {
-                        hasMore = false; // Less than 1000 means we reached the end
-                    } else {
-                        page++; // Fetch next page
-                    }
-                } else {
-                    hasMore = false;
-                }
-
-                // Safety break to prevent infinite loops (e.g. max 10k rows)
-                if (allLogs.length >= 10000) break;
-            }
-
-            // Process Data (Group by Session)
-            const groups: { [key: string]: { key: SessionKey, logs: ProductionLog[] } } = {};
-
-            allLogs.forEach((log: any) => {
-                const dateStr = new Date(log.created_at).toLocaleDateString();
-                const opId = log.operator_id;
-                const opUser = opId ? userMap[opId] : null;
-
-                const opName = opUser?.name || (opId ? 'Unknown Operator' : 'Automatic Machine Log');
-                const opEmail = opUser?.email || 'N/A';
-
-                const uniqueKey = `${dateStr}_${opId || 'AUTO'}`;
-
-                if (!groups[uniqueKey]) {
-                    groups[uniqueKey] = {
-                        key: {
-                            date: dateStr,
-                            operatorId: opId || 'AUTO',
-                            operatorName: opName,
-                            operatorEmail: opEmail
-                        },
-                        logs: []
+                if (!summaryMap[machineId]) {
+                    // Find machine config
+                    const mConfig = MACHINES.find(m => m.id === machineId);
+                    summaryMap[machineId] = {
+                        machineId,
+                        machineName: mConfig?.name || machineId,
+                        totalQty: 0,
+                        logCount: 0,
+                        avgSpeed: 0,
+                        logs: [],
+                        operatorName: ''
                     };
                 }
 
-                groups[uniqueKey].logs.push({
+                const summary = summaryMap[machineId];
+                summary.logs.push({
                     Log_ID: log.id,
                     Timestamp: log.created_at,
-                    Job_ID: log.job_id || log.machine_id,
-                    Operator_Email: opEmail,
+                    Job_ID: log.job_id,
+                    Operator_Email: log.operator_id ? (userMap[log.operator_id]?.name || 'Unknown') : 'Auto',
                     Output_Qty: log.alarm_count || 1,
                     Note: log.product_sku,
-                    formattedDate: dateStr
+                    formattedDate: new Date(log.created_at).toLocaleTimeString()
                 } as any);
+
+                summary.totalQty += (Number(log.alarm_count) || 1);
+                summary.logCount++;
             });
 
-            const sessionList = Object.values(groups).sort((a, b) =>
-                new Date(b.key.date).getTime() - new Date(a.key.date).getTime()
-            );
+            // Calculate Metrics (Operator, Speed)
+            Object.values(summaryMap).forEach(s => {
+                // Operator: Take the most frequent or first
+                if (s.logs.length > 0) {
+                    s.operatorName = s.logs[0].Operator_Email; // Simple first logic
+                }
 
-            setSessions(sessionList);
+                // Speed
+                if (s.logs.length > 1) {
+                    const sorted = [...s.logs].sort((a, b) => new Date(a.Timestamp).getTime() - new Date(b.Timestamp).getTime());
+                    const start = new Date(sorted[0].Timestamp).getTime();
+                    const end = new Date(sorted[sorted.length - 1].Timestamp).getTime();
+                    const durationMinutes = (end - start) / 60000;
+                    if (s.totalQty > 0 && durationMinutes > 0) {
+                        s.avgSpeed = durationMinutes / s.totalQty;
+                    }
+                }
+            });
+
+            setDailyData(summaryMap);
 
         } catch (err) {
-            console.error("History load failed:", err);
+            console.error("Fetch Error:", err);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
-    const handleDownload = (session: { key: SessionKey, logs: ProductionLog[] }) => {
-        const { key, logs } = session;
-        if (!logs || logs.length === 0) return;
-
-        // Sort ASC for accurate Start/End times
-        const sorted = [...logs].sort((a, b) => new Date(a.Timestamp).getTime() - new Date(b.Timestamp).getTime());
-
-        const startTime = new Date(sorted[0].Timestamp);
-        const endTime = new Date(sorted[sorted.length - 1].Timestamp);
-
+    const handleDownload = (summary: MachineDailySummary) => {
+        if (!summary.logs.length) return;
+        const sorted = [...summary.logs].sort((a, b) => new Date(a.Timestamp).getTime() - new Date(b.Timestamp).getTime());
         generateSessionReport(
-            key.operatorName || key.operatorEmail, // Show Name on PDF
-            logs[0].Job_ID || 'Unknown Machine',
+            summary.machineName,
+            `Daily Report ${selectedDate}`,
             sorted,
-            startTime,
-            endTime
+            new Date(sorted[0].Timestamp),
+            new Date(sorted[sorted.length - 1].Timestamp)
         );
     };
 
-    const [selectedSession, setSelectedSession] = useState<{ key: SessionKey, logs: ProductionLog[] } | null>(null);
-
-    // ... (existing code)
+    const shiftDate = (days: number) => {
+        const d = new Date(selectedDate);
+        d.setDate(d.getDate() + days);
+        setSelectedDate(d.toISOString().split('T')[0]);
+    };
 
     return (
-        <div className="p-6 max-w-4xl mx-auto pb-24">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-                {/* ... (existing header) ... */}
-                <div>
-                    <h1 className="text-3xl font-bold text-gray-800 mb-2 flex items-center gap-3">
-                        <FileText className="text-blue-600" size={32} />
-                        {isBoss && viewMode === 'all' ? 'All Staff Reports' : 'My Report History'}
-                    </h1>
-                    <p className="text-gray-500">
-                        {isBoss ? 'Boss Mode: View daily reports for all operators.' : 'Archive of your daily production reports.'}
-                    </p>
+        <div className="h-full flex flex-col bg-gray-50/50">
+            {/* --- HEADER --- */}
+            <div className="px-6 py-5 bg-white border-b border-gray-200 flex flex-col md:flex-row justify-between items-center gap-4">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                        <Activity size={24} />
+                    </div>
+                    <div>
+                        <h1 className="text-2xl font-black text-gray-900 tracking-tight">Production Kanban</h1>
+                        <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Factory Floor Overview</p>
+                    </div>
                 </div>
 
-                {isBoss && (
-                    <div className="flex bg-gray-200 p-1 rounded-lg self-start">
-                        <button
-                            onClick={() => setViewMode('all')}
-                            className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${viewMode === 'all' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
-                        >
-                            All Staff
-                        </button>
-                        <button
-                            onClick={() => setViewMode('mine')}
-                            className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${viewMode === 'mine' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
-                        >
-                            My Reports
-                        </button>
-                    </div>
-                )}
+                {/* Date Controls */}
+                <div className="flex items-center gap-3 bg-gray-100 p-1 rounded-xl shadow-inner">
+                    <button onClick={() => shiftDate(-1)} className="p-2 hover:bg-white rounded-lg transition-all text-gray-500 hover:text-gray-900 shadow-sm"><ChevronLeft size={20} /></button>
+                    <input
+                        type="date"
+                        value={selectedDate}
+                        onChange={(e) => setSelectedDate(e.target.value)}
+                        className="bg-transparent text-center font-bold text-gray-800 outline-none border-none py-1"
+                    />
+                    <button onClick={() => shiftDate(1)} className="p-2 hover:bg-white rounded-lg transition-all text-gray-500 hover:text-gray-900 shadow-sm"><ChevronRight size={20} /></button>
+                </div>
             </div>
 
-            {loading ? (
-                <div className="flex justify-center p-12">
-                    <Loader className="animate-spin text-blue-500" size={48} />
-                </div>
-            ) : (
-                <div className="grid gap-4">
-                    {sessions.length === 0 && (
-                        <div className="text-center p-12 bg-white rounded-xl shadow-sm border border-gray-100">
-                            <Calendar className="mx-auto h-12 w-12 text-gray-300 mb-4" />
-                            <h3 className="text-lg font-medium text-gray-900">No reports found</h3>
-                            <p className="text-gray-500">Production logs will appear here once recorded.</p>
+            {/* --- KANBAN BOARD --- */}
+            <div className="flex-1 overflow-x-auto overflow-y-hidden p-6">
+                <div className="flex gap-6 h-full min-w-max">
+                    {loading ? (
+                        <div className="flex items-center justify-center w-full h-64 text-gray-400 gap-3">
+                            <Loader className="animate-spin" /> Loading data...
                         </div>
+                    ) : (
+                        FACTORIES.map(factory => {
+                            // Filter machines for this factory
+                            const factoryMachines = MACHINES.filter(m => m.factory_id === factory.id);
+                            if (factoryMachines.length === 0) return null; // Skip empty factories if any
+
+                            return (
+                                <div key={factory.id} className="w-[320px] flex flex-col h-full bg-gray-100/50 rounded-2xl border border-gray-200/60 shadow-sm hover:shadow-md transition-shadow">
+                                    {/* Column Header */}
+                                    <div className="p-4 border-b border-gray-200 bg-white rounded-t-2xl flex justify-between items-center">
+                                        <h3 className="font-bold text-gray-800">{factory.name}</h3>
+                                        <span className="text-[10px] font-bold bg-gray-100 text-gray-500 px-2 py-1 rounded-full border border-gray-200">
+                                            {factory.id}
+                                        </span>
+                                    </div>
+
+                                    {/* Column Body */}
+                                    <div className="p-3 space-y-3 overflow-y-auto flex-1 custom-scrollbar">
+                                        {factoryMachines.map(machine => {
+                                            const summary = dailyData[machine.id];
+                                            const hasData = summary && summary.logCount > 0;
+
+                                            return (
+                                                <div
+                                                    key={machine.id}
+                                                    onClick={() => hasData && setSelectedSummary(summary)}
+                                                    className={`
+                                                        relative p-4 rounded-xl border transition-all duration-200 group
+                                                        ${hasData
+                                                            ? 'bg-white border-blue-200 cursor-pointer hover:border-blue-400 hover:shadow-lg hover:-translate-y-1'
+                                                            : 'bg-gray-50 border-gray-200 opacity-60' // Idle/Ghost State
+                                                        }
+                                                    `}
+                                                >
+                                                    {/* Status Dot */}
+                                                    <div className={`absolute top-4 right-4 w-2.5 h-2.5 rounded-full ${hasData ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse' : 'bg-gray-300'}`} />
+
+                                                    <h4 className={`text-sm font-bold mb-1 ${hasData ? 'text-gray-900' : 'text-gray-400'}`}>
+                                                        {machine.name}
+                                                    </h4>
+
+                                                    {hasData ? (
+                                                        <div className="mt-3">
+                                                            <div className="text-3xl font-black text-gray-800 flex items-baseline gap-1">
+                                                                {summary.totalQty.toLocaleString()}
+                                                                <span className="text-xs font-bold text-gray-400">sets</span>
+                                                            </div>
+
+                                                            <div className="mt-3 flex items-center justify-between text-xs font-medium text-gray-500 border-t border-gray-100 pt-3">
+                                                                <div className="flex items-center gap-1.5 overflow-hidden max-w-[60%]">
+                                                                    <div className="w-5 h-5 rounded-md bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-[10px]">
+                                                                        OP
+                                                                    </div>
+                                                                    <span className="truncate">{summary.operatorName}</span>
+                                                                </div>
+                                                                {summary.avgSpeed > 0 && (
+                                                                    <span className="text-green-600 font-mono tracking-tight">{summary.avgSpeed.toFixed(1)}m/u</span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="mt-4 flex flex-col items-center justify-center h-20 text-gray-300 border-2 border-dashed border-gray-200 rounded-lg bg-gray-50/50">
+                                                            <PowerOff size={20} className="mb-1" />
+                                                            <span className="text-[10px] font-bold uppercase">No Production</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    <div className="p-3 border-t border-gray-200 bg-gray-50 rounded-b-2xl text-center text-[10px] uppercase font-bold text-gray-400">
+                                        {factory.type} Unit
+                                    </div>
+                                </div>
+                            );
+                        })
                     )}
-
-                    {sessions.map((session, idx) => {
-                        const { key, logs } = session;
-                        const totalQty = logs.reduce((sum, l) => sum + (Number(l.Output_Qty) || 0), 0);
-
-                        return (
-                            <div key={idx} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between hover:shadow-md transition-shadow gap-4">
-                                <div className="flex items-center gap-4">
-                                    <div className={`h-12 w-12 rounded-full flex items-center justify-center font-bold text-sm ${key.operatorId === user?.employeeId ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600'
-                                        }`}>
-                                        {/* Day of Month */}
-                                        {new Date(key.date).getDate()}
-                                    </div>
-                                    <div>
-                                        <div className="flex items-center gap-2">
-                                            <h3 className="font-bold text-gray-800">{key.date}</h3>
-                                            <span className="px-2 py-0.5 rounded-full bg-gray-100 text-xs text-gray-600 font-bold border border-gray-200">
-                                                {key.operatorName}
-                                            </span>
-                                        </div>
-                                        <p className="text-xs text-gray-500 mt-0.5">
-                                            {logs.length} Entries • Total: <span className="font-bold text-gray-700">{totalQty}</span> Sets
-                                            {logs.length > 1 && (() => {
-                                                // Calculate Avg Time
-                                                const sorted = [...logs].sort((a, b) => new Date(a.Timestamp).getTime() - new Date(b.Timestamp).getTime());
-                                                const start = new Date(sorted[0].Timestamp).getTime();
-                                                const end = new Date(sorted[sorted.length - 1].Timestamp).getTime();
-                                                const durationMinutes = (end - start) / 60000;
-
-                                                // Avoid division by zero
-                                                if (totalQty > 0 && durationMinutes > 0) {
-                                                    const avgTime = durationMinutes / totalQty;
-                                                    return (
-                                                        <span className="ml-2 text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
-                                                            Avg: {avgTime.toFixed(1)} m/unit
-                                                        </span>
-                                                    );
-                                                }
-                                                return null;
-                                            })()}
-                                        </p>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-2 w-full sm:w-auto">
-                                    <button
-                                        onClick={() => setSelectedSession(session)}
-                                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-bold"
-                                    >
-                                        View
-                                    </button>
-                                    <button
-                                        onClick={() => handleDownload(session)}
-                                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium"
-                                    >
-                                        <Download size={16} />
-                                        PDF
-                                    </button>
-                                </div>
-                            </div>
-                        );
-                    })}
                 </div>
-            )}
+            </div>
 
-            {/* Modal */}
-            {selectedSession && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* --- DETAILS MODAL --- */}
+            {selectedSummary && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
                         <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50">
                             <div>
-                                <h3 className="text-xl font-bold text-gray-900">Production Report</h3>
-                                <p className="text-sm text-gray-500 flex items-center gap-2">
-                                    {selectedSession.key.date} • {selectedSession.key.operatorName}
-                                    {(() => {
-                                        const logs = selectedSession.logs;
-                                        const totalQty = logs.reduce((sum, l) => sum + (Number(l.Output_Qty) || 0), 0);
-                                        if (logs.length > 1) {
-                                            const sorted = [...logs].sort((a, b) => new Date(a.Timestamp).getTime() - new Date(b.Timestamp).getTime());
-                                            const start = new Date(sorted[0].Timestamp).getTime();
-                                            const end = new Date(sorted[sorted.length - 1].Timestamp).getTime();
-                                            const durationMinutes = (end - start) / 60000;
-                                            if (totalQty > 0 && durationMinutes > 0) {
-                                                const avgTime = durationMinutes / totalQty;
-                                                return (
-                                                    <span className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 font-bold text-xs">
-                                                        Avg: {avgTime.toFixed(1)} m/unit
-                                                    </span>
-                                                );
-                                            }
-                                        }
-                                        return null;
-                                    })()}
-                                </p>
+                                <h3 className="text-xl font-bold text-gray-900">{selectedSummary.machineName}</h3>
+                                <p className="text-sm text-gray-500 font-medium">Daily Report • {selectedDate}</p>
                             </div>
                             <button
-                                onClick={() => setSelectedSession(null)}
-                                className="p-2 hover:bg-gray-200 rounded-full transition-colors"
+                                onClick={() => setSelectedSummary(null)}
+                                className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-200 text-gray-500 hover:bg-gray-300 transition-colors"
                             >
-                                <span className="text-2xl leading-none">&times;</span>
+                                &times;
                             </button>
                         </div>
 
                         <div className="flex-1 overflow-y-auto p-0">
                             <table className="w-full text-sm text-left">
-                                <thead className="text-xs text-gray-500 uppercase bg-gray-50 sticky top-0">
+                                <thead className="text-xs text-gray-500 uppercase bg-gray-50 sticky top-0 shadow-sm z-10">
                                     <tr>
                                         <th className="px-6 py-3">Time</th>
-                                        <th className="px-6 py-3">Job / Machine</th>
+                                        <th className="px-6 py-3">Operator</th>
                                         <th className="px-6 py-3 text-right">Qty</th>
-                                        <th className="px-6 py-3">Note</th>
+                                        <th className="px-6 py-3">Product / Note</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
-                                    {selectedSession.logs.map((log) => (
-                                        <tr key={log.Log_ID} className="hover:bg-gray-50">
-                                            <td className="px-6 py-3 font-medium text-gray-900 whitespace-nowrap">
-                                                {new Date(log.Timestamp).toLocaleTimeString()}
+                                    {selectedSummary.logs.map((log) => (
+                                        <tr key={log.Log_ID} className="hover:bg-blue-50/50 transition-colors">
+                                            <td className="px-6 py-3 font-mono text-gray-600 whitespace-nowrap">
+                                                {log.formattedDate}
                                             </td>
-                                            <td className="px-6 py-3 text-gray-600">
-                                                {log.Job_ID}
+                                            <td className="px-6 py-3 font-bold text-gray-700">
+                                                {log.Operator_Email}
                                             </td>
-                                            <td className="px-6 py-3 text-right font-bold text-blue-600">
+                                            <td className="px-6 py-3 text-right font-bold text-blue-600 text-lg">
                                                 {log.Output_Qty}
                                             </td>
-                                            <td className="px-6 py-3 text-gray-500 truncate max-w-[150px]">
+                                            <td className="px-6 py-3 text-gray-500 truncate max-w-[200px]">
                                                 {log.Note || '-'}
                                             </td>
                                         </tr>
@@ -358,19 +298,19 @@ const ReportHistory: React.FC<ReportHistoryProps> = ({ user }) => {
                             </table>
                         </div>
 
-                        <div className="p-4 border-t border-gray-100 flex justify-end gap-3 bg-gray-50">
+                        <div className="p-5 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
                             <button
-                                onClick={() => setSelectedSession(null)}
-                                className="px-4 py-2 text-gray-600 font-medium hover:bg-gray-200 rounded-lg transition-colors"
+                                onClick={() => setSelectedSummary(null)}
+                                className="px-5 py-2.5 text-gray-600 font-bold hover:bg-gray-200 rounded-xl transition-colors text-sm"
                             >
                                 Close
                             </button>
                             <button
-                                onClick={() => handleDownload(selectedSession)}
-                                className="px-4 py-2 bg-blue-600 text-white font-medium hover:bg-blue-700 rounded-lg shadow-sm transition-colors flex items-center gap-2"
+                                onClick={() => handleDownload(selectedSummary)}
+                                className="px-6 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-bold shadow-lg shadow-gray-900/20 transition-all flex items-center gap-2 text-sm active:scale-95"
                             >
-                                <Download size={16} />
-                                Download PDF
+                                <Download size={18} />
+                                Download Report PDF
                             </button>
                         </div>
                     </div>
@@ -379,6 +319,5 @@ const ReportHistory: React.FC<ReportHistoryProps> = ({ user }) => {
         </div>
     );
 };
-
 
 export default ReportHistory;

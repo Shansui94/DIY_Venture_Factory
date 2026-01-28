@@ -11,7 +11,7 @@ import {
 } from '../data/constants';
 import { getRecommendedPackaging } from '../utils/packagingRules';
 import { getBubbleWrapSku } from '../utils/skuMapper';
-import { RotateCcw, Box, Settings, Clock, Layers, LogOut, Columns } from 'lucide-react';
+import { Box, Settings, Clock, Layers, LogOut } from 'lucide-react';
 
 
 import { JobOrder, ProductionLog, User } from '../types';
@@ -20,20 +20,22 @@ import { getMachineByCode, getMachineById } from '../services/productionService'
 import { Machine } from '../types';
 
 // --- PRODUCTION LANE COMPONENT ---
+// --- PRODUCTION LANE COMPONENT ---
 interface ProductionLaneProps {
     laneId: 'Left' | 'Right' | 'Single';
     machineMetadata: Machine | null;
     user: User | null;
-    operatorId: string | null; // NEW PROP
+    operatorId: string | null;
     activeJob: JobOrder | null;
+    jobs: JobOrder[]; // NEW PROP
     onProductionComplete: () => void;
-    onBeforeProduce?: () => boolean; // New Prop
+    onBeforeProduce?: () => boolean;
     className?: string;
 }
 
-const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata, user, operatorId, activeJob, onProductionComplete, onBeforeProduce, className }) => {
+const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata, jobs, onProductionComplete, onBeforeProduce, className }) => {
 
-    // Local State for this Lane
+    // ... (Keep existing state)
     const [step, setStep] = useState<1 | 2 | 3>(1);
     const [selectedLayer, setSelectedLayer] = useState<ProductLayer>('Single');
     const [selectedMaterial, setSelectedMaterial] = useState<ProductMaterial>('Clear');
@@ -42,40 +44,29 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
     const [productionNote, setProductionNote] = useState<string>('');
     const [isEditingColor, setIsEditingColor] = useState(false);
 
-    // Cooldown State
-    const [lastProducedTime, setLastProducedTime] = useState<number>(0);
-
-    const [cooldownActive, setCooldownActive] = useState<boolean>(false);
-
-    // Live Run State
     const [isLiveRun, setIsLiveRun] = useState(false);
     const [liveCount, setLiveCount] = useState(0);
-    const [activeSku, setActiveSku] = useState<string | null>(null); // NEW: Track SKU
+    const [activeSku, setActiveSku] = useState<string | null>(null);
 
-    // STEP 1 HANDLER
+    // ... (Keep handlers)
     const handleTypeSelect = (layer: ProductLayer, material: ProductMaterial) => {
         setSelectedLayer(layer);
         setSelectedMaterial(material);
         setStep(2);
     };
 
-    // STEP 2 HANDLER
     const handleSizeSelect = (size: ProductSize) => {
         setSelectedSize(size);
         const pack = getRecommendedPackaging(selectedLayer, selectedMaterial, size);
         setDerivedPackaging(pack);
         setStep(3);
-        // Reset Live State on new selection
         setIsLiveRun(false);
         setLiveCount(0);
         setActiveSku(null);
     };
 
-    // STEP 3 HANDLER: TOGGLE RUN
     const toggleProductionRun = async () => {
         if (isLiveRun) {
-            // STOP
-            // STOP
             try {
                 const machineId = machineMetadata?.id || 'T1.2-M01';
                 const dbLaneId = laneId;
@@ -89,39 +80,25 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
             setIsLiveRun(false);
             setActiveSku(null);
         } else {
-            // START
-            // PRE-CHECK: Operator Login
             if (onBeforeProduce && !onBeforeProduce()) return;
-
             if (!derivedPackaging || !selectedSize) {
                 alert("Error: Packaging or Size not selected.");
                 return;
             }
-
             const v3Sku = getBubbleWrapSku(selectedLayer, selectedMaterial, selectedSize);
-
             try {
-                // 1. Tell Backend we are now producing this SKU (Direct DB Mode)
                 const machineId = machineMetadata?.id || 'T1.2-M01';
-
-                // Determine Lane ID (Map frontend 'Single'/'Left'/'Right' to DB expectations)
-                // DB expects: 'Single', 'Left', 'Right'
                 const dbLaneId = laneId;
-
                 const { error } = await supabase.from('machine_active_products').upsert({
                     machine_id: machineId,
                     lane_id: dbLaneId,
                     product_sku: v3Sku,
                     updated_at: new Date()
                 });
-
                 if (error) throw error;
-
-                // 2. Set Local State
                 setIsLiveRun(true);
-                setLiveCount(0); // Reset session count
-                setActiveSku(v3Sku); // Store SKU for filtering
-
+                setLiveCount(0);
+                setActiveSku(v3Sku);
             } catch (error: any) {
                 console.error("Failed to start run:", error);
                 alert("Failed to start run: " + error.message);
@@ -129,47 +106,60 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
         }
     };
 
-    // LIVE COUNT SUBSCRIPTION
+    // LIVE COUNT & AUTO-JOB UPDATE
     useEffect(() => {
         if (!isLiveRun || !activeSku) return;
 
-        const start = Date.now();
-        const machineId = machineMetadata?.id || 'T1.2-M01'; // Get ID for filtering
-        console.log(`[Lane: ${laneId}] [${start}] Effect Triggered. isLiveRun: ${isLiveRun}, SKU: ${activeSku}`);
-
-        const channelName = `prod-ctrl-${laneId}-${Date.now()}`; // Unique channel
-        console.log(`[Lane: ${laneId}] Subscribing to: ${channelName}`);
+        const machineId = machineMetadata?.id || 'T1.2-M01';
+        const channelName = `prod-ctrl-${laneId}-${Date.now()}`;
 
         const channel = supabase.channel(channelName)
             .on('postgres_changes',
                 { event: 'INSERT', schema: 'public', table: 'production_logs' },
-                (payload) => {
+                async (payload) => { // Async handler
                     const newLog = payload.new;
-                    // STRICT FILTERING: Only count if Machine ID AND SKU match!
                     if (newLog.machine_id === machineId && newLog.product_sku === activeSku) {
-
-                        // NEW: Prevent Double Counting in Dual Lane Mode
-                        // If the log specifies a lane_id, it MUST match this component's laneId.
-                        if (newLog.lane_id && newLog.lane_id !== laneId) {
-                            return; // Ignore logs meant for the other lane
-                        }
+                        if (newLog.lane_id && newLog.lane_id !== laneId) return;
 
                         console.log(`[Lane: ${laneId}] ⚡ MATCHED SIGNAL:`, newLog);
-                        setLiveCount(prev => prev + (newLog.alarm_count || 1));
+                        const qty = newLog.alarm_count || 1;
+                        setLiveCount(prev => prev + qty);
+
+                        // --- AUTO-UPDATE MATCHING JOB ---
+                        // Construct current product name to match Job
+                        const currentProduct = `${selectedLayer} ${selectedMaterial} ${selectedSize}`; // e.g., "Single Clear 50cm"
+
+                        // Find a pending job for this machine + product
+                        // STRICT MATCH ONLY: Prevents cross-deduction (e.g. producing Blue won't deduct Orange)
+                        const matchingJob = jobs.find(j =>
+                            (j.machine === machineId || j.Machine_ID === machineId) &&
+                            j.status !== 'Completed' &&
+                            j.product === currentProduct // EXACT MATCH
+                        );
+
+                        if (matchingJob) {
+                            const newProduced = (matchingJob.produced || 0) + qty;
+                            const isComplete = newProduced >= matchingJob.target;
+
+                            // Optimistic / Fire & Forget Update
+                            await supabase.from('job_orders').update({
+                                produced: newProduced,
+                                status: isComplete ? 'Completed' : matchingJob.status
+                            }).eq('job_id', matchingJob.Job_ID || matchingJob.id); // Try both ID fields
+
+                            console.log(`Auto-updated Job ${matchingJob.Job_ID}: +${qty} (${newProduced}/${matchingJob.target})`);
+                        }
+
                         onProductionComplete();
-                    } else {
-                        // console.log(`[Lane: ${laneId}] Ignored Signal (Mismatch):`, newLog.product_sku);
                     }
                 }
             )
-            .subscribe((status, err) => {
-                console.log(`[Lane: ${laneId}] [${Date.now()}] Subscription Status: ${status}`, err);
-            });
+            .subscribe();
 
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [isLiveRun, activeSku, machineMetadata, laneId]);
+    }, [isLiveRun, activeSku, machineMetadata, laneId, jobs, selectedLayer, selectedMaterial, selectedSize]);
 
     // --- RENDER LANE ---
     return (
@@ -402,7 +392,7 @@ interface ProductionControlProps {
 
 const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }) => {
     // Machine Selection State (Persisted in Session & Local)
-    const [selectedMachine, setSelectedMachine] = useState<string | null>(
+    const [selectedMachine] = useState<string | null>(
         sessionStorage.getItem('selectedMachine') || localStorage.getItem('device_machine_id')
     );
     const [machineMetadata, setMachineMetadata] = useState<Machine | null>(null);
@@ -441,11 +431,10 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
         setLoginError("");
         try {
             // Check sys_users_v2 for this PIN
-            const { data, error } = await supabase
+            const { data } = await supabase
                 .from('sys_users_v2')
                 .select('id, name')
                 .eq('pin_code', code)
-                .eq('status', 'Active') // Ensure active
                 .eq('status', 'Active') // Ensure active
                 .limit(1);
 
@@ -607,6 +596,38 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                         )}
                     </div>
 
+                    {/* NEW: OPERATOR JOB FEED WIDGET */}
+                    {/* DEBUG: Force show and print data */}
+                    <div className="flex flex-col gap-2 mr-4 flex-1 max-w-lg">
+                        {/* DEBUG OVERLAY - Remove after fixing */}
+                        {/* <div className="text-[10px] text-red-500 bg-black/50 absolute top-0 left-0">
+                            M: {selectedMachine} | Jobs: {jobs.length}
+                         </div> */}
+
+                        {jobs.length > 0 && (
+                            <div className="flex items-center justify-between text-xs text-gray-400 px-1">
+                                <span className="uppercase font-bold tracking-wider">Active Tasks</span>
+                                <span className="bg-blue-600/20 text-blue-400 px-2 rounded-full">
+                                    {jobs.filter(j => (j.machine === selectedMachine || j.Machine_ID === selectedMachine) && j.status !== 'Completed').length} Pending
+                                </span>
+                            </div>
+                        )}
+
+                        <div className="flex gap-2 overflow-x-auto pb-1 max-w-full custom-scrollbar">
+                            {jobs.filter(j => (j.machine === selectedMachine || j.Machine_ID === selectedMachine) && j.status !== 'Completed').slice(0, 3).map(job => (
+                                <div key={job.Job_ID} className="bg-gray-800/80 border border-white/10 p-2 rounded-lg flex-shrink-0 w-48 shadow-lg hover:border-blue-500/50 transition-colors">
+                                    <div className="text-white font-bold text-xs truncate mb-1" title={job.product}>{job.product}</div>
+                                    <div className="flex justify-between items-center text-[10px] text-gray-400">
+                                        <span>Qty: <span className="text-white">{job.target}</span></span>
+                                        <span className="text-orange-400 flex items-center gap-1">
+                                            <Clock size={8} /> Pending
+                                        </span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
                     <div className="flex items-center gap-2">
                         {/* CLOCK IN / OUT BUTTONS - HEADER PLACEMENT */}
                         {!operatorId ? (
@@ -682,6 +703,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                                     user={user}
                                     operatorId={operatorId} // Pass ID
                                     activeJob={activeJob}
+                                    jobs={jobs}
                                     onProductionComplete={fetchUserLogs}
                                     onBeforeProduce={handleProductionAttempt}
                                 />
@@ -691,6 +713,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                                     user={user}
                                     operatorId={operatorId} // Pass ID
                                     activeJob={activeJob}
+                                    jobs={jobs}
                                     onProductionComplete={fetchUserLogs}
                                     onBeforeProduce={handleProductionAttempt}
                                 />
@@ -704,6 +727,7 @@ const ProductionControl: React.FC<ProductionControlProps> = ({ user, jobs = [] }
                                 user={user}
                                 operatorId={operatorId} // Pass ID
                                 activeJob={activeJob}
+                                jobs={jobs}
                                 onProductionComplete={fetchUserLogs}
 
                                 onBeforeProduce={handleProductionAttempt}
