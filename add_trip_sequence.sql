@@ -1,0 +1,1 @@
+ALTER TABLE public.sales_orders ADD COLUMN IF NOT EXISTS trip_sequence INTEGER DEFAULT 999;

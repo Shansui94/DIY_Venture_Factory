@@ -101,6 +101,7 @@ export interface SalesOrder {
     driverName?: string; // NEW: Resolved Driver Name for display
     deliveryAddress?: string; // Mapped from delivery_address
     zone?: string; // Mapped from zone
+    tripSequence?: number; // Mapped from trip_sequence
 
     // Logistics V2
     trip_id?: string;

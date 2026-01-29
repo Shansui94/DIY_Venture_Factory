@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import * as Dnd from '@hello-pangea/dnd';
 import { supabase } from '../services/supabase';
 import { getV2Items } from '../services/apiV2';
-import { determineZone, findBestFactory } from '../utils/logistics';
+import { determineZone, determineState, findBestFactory } from '../utils/logistics';
 import {
     Plus, Search, Calendar, FileText, X, Truck,
-    User as UserIcon, Box, Zap
+    User as UserIcon, Box, Zap, Trash2
 } from 'lucide-react';
 import {
     SalesOrder,
@@ -146,7 +146,7 @@ const DeliveryOrderManagement: React.FC = () => {
     const [statusFilter, setStatusFilter] = useState<string>('All');
 
     // AI / Smart Import State
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    // const [isAnalyzing, setIsAnalyzing] = useState(false);
 
     // Editing State
     const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
@@ -160,12 +160,13 @@ const DeliveryOrderManagement: React.FC = () => {
     const [newOrderNotes, setNewOrderNotes] = useState(''); // Batch Note
 
     // AI Autocomplete State
-    const [customerDB, setCustomerDB] = useState<any[]>([]);
-    const [filteredCustomers, setFilteredCustomers] = useState<any[]>([]);
-    const [showSuggestions, setShowSuggestions] = useState(false);
+    // AI Autocomplete State (Unused)
+    // const [customerDB, setCustomerDB] = useState<any[]>([]);
+    // const [filteredCustomers, setFilteredCustomers] = useState<any[]>([]);
+    // const [showSuggestions, setShowSuggestions] = useState(false);
 
-    // Hybrid Item Entry State
-    const [entryMode, setEntryMode] = useState<'search' | 'manual'>('search');
+    // Hybrid Item Entry State (Unused)
+    // const [entryMode, setEntryMode] = useState<'search' | 'manual'>('search');
 
     // -- Mode A: V2 Search --
     const [v2Items, setV2Items] = useState<V2Item[]>([]);
@@ -182,14 +183,15 @@ const DeliveryOrderManagement: React.FC = () => {
     const fetchData = async () => {
 
         try {
-            const [usersRes, ordersRes, itemsRes, customersRes] = await Promise.all([
+            const [usersRes, ordersRes, itemsRes] = await Promise.all([
                 supabase.from('users_public').select('*').eq('role', 'Driver'),
-                supabase.from('sales_orders').select('*').order('created_at', { ascending: false }),
+                // Sort by trip_sequence first, then creation date
+                supabase.from('sales_orders').select('*').order('trip_sequence', { ascending: true }).order('created_at', { ascending: false }),
                 getV2Items(),
-                supabase.from('sys_customers').select('*')
+                // supabase.from('sys_customers').select('*') // Unused
             ]);
 
-            if (customersRes.data) setCustomerDB(customersRes.data);
+            // if (customersRes.data) setCustomerDB(customersRes.data);
             if (itemsRes) setV2Items(itemsRes);
 
             if (usersRes.data) {
@@ -214,7 +216,8 @@ const DeliveryOrderManagement: React.FC = () => {
                     deadline: o.deadline,
                     notes: o.notes, // Map notes
                     zone: o.zone,
-                    deliveryAddress: o.delivery_address
+                    deliveryAddress: o.delivery_address,
+                    tripSequence: o.trip_sequence || 0 // Map sequence
                 }));
                 setOrders(mappedOrders);
             }
@@ -225,10 +228,27 @@ const DeliveryOrderManagement: React.FC = () => {
 
     useEffect(() => {
         fetchData();
-        const channel = supabase.channel('do-changes')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'sales_orders' }, fetchData)
+
+        // 1. Subscribe to Orders (Logging Only - Disabled auto-fetch to protect Optimistic UI)
+        const orderInfo = supabase.channel('do-changes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'sales_orders' }, () => {
+                console.log("Realtime: Order changed. (Auto-refresh disabled to prioritize local state safety)");
+                // fetchData();
+            })
             .subscribe();
-        return () => { supabase.removeChannel(channel); };
+
+        // 2. Subscribe to Drivers (users_public)
+        const userInfo = supabase.channel('driver-changes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'users_public' }, () => {
+                console.log("Realtime: Driver list changed, fetching...");
+                fetchData(); // Keep this active as adding drivers is rare and safely syncable
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(orderInfo);
+            supabase.removeChannel(userInfo);
+        };
     }, []);
 
     // Filter Logic
@@ -260,6 +280,105 @@ const DeliveryOrderManagement: React.FC = () => {
 
     // --- HANDLERS ---
 
+    const onDragEnd = async (result: Dnd.DropResult) => {
+        const { destination, source, draggableId } = result;
+
+        if (!destination) return;
+
+        // Same position
+        if (
+            destination.droppableId === source.droppableId &&
+            destination.index === source.index
+        ) {
+            return;
+        }
+
+        const newDriverId = destination.droppableId === 'unassigned' ? null : destination.droppableId;
+        const oldDriverId = source.droppableId === 'unassigned' ? null : source.droppableId; // Could be 'unassigned' or a user ID
+        const orderId = draggableId;
+
+        // 1. Get all orders for the DESTINATION driver
+        const destinationOrders = filteredOrders
+            .filter(o => o.driverId === newDriverId)
+            .sort((a, b) => (a.tripSequence || 0) - (b.tripSequence || 0));
+
+        // 2. Insert the moved item into the new position
+        const movedOrder = orders.find(o => o.id === orderId);
+        if (!movedOrder) return;
+
+        // If moving within same list
+        if (newDriverId === oldDriverId) {
+            destinationOrders.splice(source.index, 1); // Remove from old pos
+            destinationOrders.splice(destination.index, 0, movedOrder); // Insert at new pos
+        } else {
+            // Moving across lists
+            destinationOrders.splice(destination.index, 0, { ...movedOrder, driverId: newDriverId || undefined });
+        }
+
+        // 3. Optimistic Update (Global State)
+        const newOrdersState = orders.map(o => {
+            // Update the moved order
+            if (o.id === orderId) {
+                return { ...o, driverId: newDriverId || undefined }; // Cast null to undefined for state
+            }
+            return o;
+        });
+
+        // We also need to reflect the sequence update immediately in UI (Badge)
+        // Let's create a map of id -> new sequence
+        const sequenceMap = new Map<string, number>();
+        destinationOrders.forEach((o, index) => {
+            sequenceMap.set(o.id, index + 1);
+        });
+
+        const finalOptimisticOrders = newOrdersState.map(o => {
+            if (sequenceMap.has(o.id)) {
+                return { ...o, tripSequence: sequenceMap.get(o.id) };
+            }
+            return o;
+        });
+
+        setOrders(finalOptimisticOrders);
+
+
+        // 4. Server Update (Batch)
+        try {
+            // A. Update the moved item's driver first (if changed)
+            if (newDriverId !== oldDriverId) {
+                await supabase.from('sales_orders').update({ driver_id: newDriverId }).eq('id', orderId);
+            }
+
+            // B. Update Sequences for ALL affected items in the destination column
+            // (Naive approach: update all n items. For < 50 items this is fine)
+            const updates = destinationOrders.map((o, index) =>
+                supabase.from('sales_orders').update({ trip_sequence: index + 1 }).eq('id', o.id)
+            );
+
+            await Promise.all(updates);
+
+        } catch (err) {
+            console.error("Failed to resequence:", err);
+            alert("Sync error. Refreshing...");
+            fetchData();
+        }
+    };
+
+    // DELETE ORDER
+    const handleDeleteOrder = async (orderId: string, orderNumber: string) => {
+        if (!window.confirm(`Are you sure you want to DELETE Order ${orderNumber}?\nThis cannot be undone.`)) return;
+
+        try {
+            const { error } = await supabase.from('sales_orders').delete().eq('id', orderId);
+            if (error) throw error;
+
+            // Optimistic Remove
+            setOrders(prev => prev.filter(o => o.id !== orderId));
+
+        } catch (err: any) {
+            alert("Delete failed: " + err.message);
+        }
+    };
+
     // APPROVE AMENDMENT
     const handleApproveAmendment = async (order: SalesOrder) => {
         if (!window.confirm(`Approve changes for Order ${order.orderNumber}? \nThis will deduct stock and mark as Delivered.`)) return;
@@ -288,8 +407,19 @@ const DeliveryOrderManagement: React.FC = () => {
 
             if (error) throw error;
 
+            if (error) throw error;
+
             alert("✅ Approved & Stock Deducted!");
-            fetchData();
+
+            // Optimistic Update
+            setOrders(prev => prev.map(o => {
+                if (o.id === order.id) {
+                    return { ...o, status: 'Delivered' };
+                }
+                return o;
+            }));
+
+            // fetchData(); // Optional debounce
 
         } catch (e: any) {
             alert("Error: " + e.message);
@@ -305,7 +435,7 @@ const DeliveryOrderManagement: React.FC = () => {
             sku: selectedV2Item.sku,
             quantity: currentItemQty,
             remark: currentItemRemark,
-            packaging: selectedV2Item.uom || 'Unit'
+            packaging: (selectedV2Item.uom || 'Unit') as any
         };
 
         setNewOrderItems([...newOrderItems, newItem]);
@@ -321,6 +451,7 @@ const DeliveryOrderManagement: React.FC = () => {
         setNewOrderItems(updated);
     };
 
+    /*
     const handleCustomerSearch = (term: string) => {
         setOrderCustomer(term);
         if (term.length > 0) {
@@ -337,6 +468,7 @@ const DeliveryOrderManagement: React.FC = () => {
         setNewOrderAddress(customer.address || '');
         setShowSuggestions(false);
     };
+    */
 
     const handleSubmitOrder = async () => {
         // if (!orderCustomer.trim()) return alert("Enter Customer Name");  <-- Removed validation
@@ -374,15 +506,23 @@ const DeliveryOrderManagement: React.FC = () => {
                 notes: newOrderNotes // Include Batch Notes
             };
 
+            let newOrderObj: SalesOrder | null = null;
+
             if (editingOrderId) {
                 const { error } = await supabase.from('sales_orders').update(payload).eq('id', editingOrderId);
                 if (error) throw error;
                 alert(`Order Updated!\nAssigned to ${bestFactory.name}`);
+
+                // Optimistic Update: Edit
+                newOrderObj = { ...orders.find(o => o.id === editingOrderId)!, ...payload, id: editingOrderId, orderNumber: doNumber };
+                setOrders(prev => prev.map(o => o.id === editingOrderId ? newOrderObj! : o));
+
             } else {
-                const { error } = await supabase.from('sales_orders').insert(payload);
+                const { data, error } = await supabase.from('sales_orders').insert(payload).select().single();
                 if (error) throw error;
 
-                // Auto-save NEW customer
+                // Auto-save NEW customer (Unused)
+                /*
                 const existing = customerDB.find(c => c.name.toLowerCase() === orderCustomer.toLowerCase());
                 if (!existing && newOrderAddress) {
                     supabase.from('sys_customers').insert({
@@ -391,11 +531,33 @@ const DeliveryOrderManagement: React.FC = () => {
                         supabase.from('sys_customers').select('*').then(res => res.data && setCustomerDB(res.data));
                     });
                 }
+                */
                 alert(`Order Created!\nAssigned to ${bestFactory.name} (Zone: ${zone})`);
+
+                // Optimistic Update: Create
+                if (data) {
+                    newOrderObj = {
+                        id: data.id,
+                        orderNumber: data.order_number,
+                        customer: data.customer,
+                        driverId: data.driver_id,
+                        items: data.items,
+                        status: data.status,
+                        orderDate: data.order_date,
+                        deadline: data.deadline,
+                        notes: data.notes,
+                        zone: data.zone,
+                        deliveryAddress: data.delivery_address,
+                        tripSequence: data.trip_sequence || 999
+                    };
+                    setOrders(prev => [newOrderObj!, ...prev]);
+                }
             }
 
             handleCloseModal();
-            fetchData();
+            // Removed automatic fetch to prevent race conditions overwriting optimistic UI
+            // We rely on the optimistic update we just made above.
+
         } catch (err: any) {
             alert("Error: " + err.message);
         }
@@ -418,7 +580,24 @@ const DeliveryOrderManagement: React.FC = () => {
         return d ? d.name : 'Unknown Driver';
     }
 
-    // --- AI SMART IMPORT LOGIC ---
+    // ... (rest of functions) ...
+
+    function getStateColor(state: string) {
+        switch (state) {
+            case 'Selangor': return 'text-purple-400 bg-purple-500/10 border-purple-500/20';
+            case 'K. Lumpur': return 'text-blue-400 bg-blue-500/10 border-blue-500/20';
+            case 'Johor': return 'text-red-400 bg-red-500/10 border-red-500/20';
+            case 'Penang': return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
+            case 'Melaka': return 'text-orange-400 bg-orange-500/10 border-orange-500/20';
+            case 'Perak': return 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20';
+            default: return 'text-slate-400 bg-slate-800 border-slate-700';
+        }
+    }
+
+    // --- RENDER ---
+    // (See return statement below for UI changes)
+
+    /* Unused AI Stub
     const handleAIFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -462,6 +641,7 @@ const DeliveryOrderManagement: React.FC = () => {
             setIsAnalyzing(false);
         }
     };
+    */
 
 
     return (
@@ -501,24 +681,29 @@ const DeliveryOrderManagement: React.FC = () => {
                 </div>
 
                 {/* Status Tabs */}
-                <div className="lg:col-span-2 flex bg-slate-900/50 backdrop-blur-sm border border-slate-800 rounded-xl p-1 relative overflow-x-auto">
-                    {['All', 'New', 'Pending Approval', 'Delivered'].map(status => (
+                <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800">
+                    {/* Filter Tabs */}
+                    {/* Removed: 'Prepared', 'In Transit' as per user request (Simplifying workflow) */}
+                    {['All', 'Pending Approval', 'Delivered', 'Cancelled'].map(status => (
                         <button
                             key={status}
                             onClick={() => setStatusFilter(status)}
-                            className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${statusFilter === status
-                                ? 'bg-blue-600/20 text-blue-400 shadow-sm border border-blue-500/10'
-                                : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
+                            className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all
+                                ${statusFilter === status
+                                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50'
+                                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
                                 }`}
                         >
-                            {status === 'Pending Approval' ? (
+                            {status === 'Delivered' ? 'Loaded' : (status === 'Pending Approval' ? (
                                 <span className="flex items-center gap-2">
                                     Pending
                                     {orders.filter(o => o.status === 'Pending Approval').length > 0 && (
-                                        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                                        <span className="bg-red-500 text-white text-[10px] px-1.5 rounded-full animate-pulse">
+                                            {orders.filter(o => o.status === 'Pending Approval').length}
+                                        </span>
                                     )}
                                 </span>
-                            ) : status}
+                            ) : status === 'All' ? 'Active' : status)}
                         </button>
                     ))}
                 </div>
@@ -527,21 +712,40 @@ const DeliveryOrderManagement: React.FC = () => {
             {/* --- MAIN GRID --- */}
             <Dnd.DragDropContext onDragEnd={onDragEnd}>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {drivers.map(driver => {
-                        const driverOrders = filteredOrders.filter(o => o.driverId === driver.uid);
-                        if (driverOrders.length === 0 && (searchTerm || statusFilter !== 'All')) return null;
+                    {/* Add Unassigned Pseudo-Driver if not in list */}
+                    {[
+                        { uid: 'unassigned', name: '📦 Unassigned / New', email: '', role: 'Driver' } as User,
+                        ...drivers
+                    ].map(driver => {
+                        const driverOrders = filteredOrders
+                            .filter(o => {
+                                if (driver.uid === 'unassigned') return !o.driverId; // Match null/undefined
+                                return o.driverId === driver.uid;
+                            })
+                            .sort((a, b) => (a.tripSequence || 0) - (b.tripSequence || 0)); // Ensure visual order matches logical order for DnD
+
+                        if (driverOrders.length === 0 && (searchTerm || statusFilter !== 'All') && driver.uid !== 'unassigned') return null;
+                        // Always show Unassigned column if there are orders, or if we are in default view
+                        if (driver.uid === 'unassigned' && driverOrders.length === 0 && (searchTerm || statusFilter !== 'All')) return null;
+
+                        const isUnassigned = driver.uid === 'unassigned';
 
                         return (
-                            <div key={driver.uid} className="bg-[#121214] border border-[#27272a] rounded-2xl flex flex-col overflow-hidden shadow-2xl shadow-black/50 hover:border-slate-600 transition-colors">
-                                {/* Card Header */}
-                                <div className="p-5 border-b border-[#27272a] bg-[#18181b] flex items-center justify-between group">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-900/40 text-white">
-                                            <UserIcon size={20} className="fill-white/20" />
+                            <div key={driver.uid} className={`flex flex-col gap-4 rounded-2xl p-4 border transition-all ${isUnassigned ? 'bg-slate-900/50 border-dashed border-slate-700' : 'bg-slate-900/50 border-slate-800'
+                                }`}>
+                                {/* Driver Header */}
+                                <div className="flex items-center justify-between pb-2 border-b border-white/5">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold shadow-lg ${isUnassigned ? 'bg-slate-700 text-slate-400' : 'bg-gradient-to-br from-blue-600 to-cyan-600 text-white'
+                                            }`}>
+                                            {isUnassigned ? '?' : (driver.name || '?').charAt(0).toUpperCase()}
                                         </div>
                                         <div>
-                                            <h3 className="font-bold text-white text-lg leading-tight">{driver.name}</h3>
-                                            <p className="text-[11px] text-zinc-500 font-mono uppercase tracking-wider">ID: {driver.uid.substring(0, 6)}</p>
+                                            <div className={`font-bold text-sm ${isUnassigned ? 'text-slate-400' : 'text-white'}`}>{driver.name || 'Unknown'}</div>
+                                            <div className="text-[10px] text-slate-500 font-mono flex items-center gap-2">
+                                                {!isUnassigned && <><Truck size={10} /> {driverOrders.length} Orders</>}
+                                                {isUnassigned && <><Box size={10} /> Pending Assign</>}
+                                            </div>
                                         </div>
                                     </div>
                                     <div className="flex flex-col items-end">
@@ -584,8 +788,25 @@ const DeliveryOrderManagement: React.FC = () => {
                                                             </div>
 
                                                             <div className="flex justify-between items-start mb-2">
-                                                                <div className="font-mono text-sm font-black text-blue-400 bg-blue-500/10 px-2 py-1 rounded border border-blue-500/20 tracking-wide">
-                                                                    {order.orderNumber}
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className="font-mono text-sm font-black text-blue-400 bg-blue-500/10 px-2 py-1 rounded border border-blue-500/20 tracking-wide">
+                                                                        {order.orderNumber}
+                                                                    </div>
+                                                                    {order.deliveryAddress && (
+                                                                        <div className={`text-[10px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider ${getStateColor(determineState(order.deliveryAddress))}`}>
+                                                                            {determineState(order.deliveryAddress)}
+                                                                        </div>
+                                                                    )}
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleDeleteOrder(order.id, order.orderNumber);
+                                                                        }}
+                                                                        className="p-1 text-slate-600 hover:text-red-500 hover:bg-red-500/10 rounded-md transition-colors"
+                                                                        title="Delete Order"
+                                                                    >
+                                                                        <Trash2 size={14} />
+                                                                    </button>
                                                                 </div>
                                                                 <div className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider border ${order.status === 'New' ? 'text-amber-400 border-amber-500/20 bg-amber-500/10' :
                                                                     order.status === 'Delivered' ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' :
@@ -886,8 +1107,10 @@ const DeliveryOrderManagement: React.FC = () => {
 
 // Start Icon helper needed for V2 items check mark
 
-function CheckCircle({ size, className }: { size?: number, className?: string }) {
+/*
+function CheckCircle({size, className}: {size ?: number, className ?: string}) {
     return <div className={`rounded-full border flex items-center justify-center ${className}`} style={{ width: size, height: size }}>✓</div>;
-}
+            */
+
 
 export default DeliveryOrderManagement;

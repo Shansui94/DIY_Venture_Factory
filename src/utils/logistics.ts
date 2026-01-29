@@ -110,6 +110,28 @@ export const determineZone = (address: string): DeliveryZone => {
     return 'Central_Left';
 };
 
+export const determineState = (address: string): string => {
+    const lowerAddr = address.toLowerCase();
+
+    if (lowerAddr.includes('johor') || lowerAddr.includes('jb') || lowerAddr.includes('skudai') || lowerAddr.includes('pasir gudang')) return 'Johor';
+    if (lowerAddr.includes('penang') || lowerAddr.includes('pulau pinang') || lowerAddr.includes('georgetown') || lowerAddr.includes('butterworth')) return 'Penang';
+    if (lowerAddr.includes('kuala lumpur') || lowerAddr.includes('kl ') || lowerAddr.includes('wilayah persekutuan')) return 'K. Lumpur';
+    if (lowerAddr.includes('selangor') || lowerAddr.includes('shah alam') || lowerAddr.includes('petaling jaya') || lowerAddr.includes('klang') || lowerAddr.includes('kajang')) return 'Selangor';
+    if (lowerAddr.includes('melaka') || lowerAddr.includes('malacca')) return 'Melaka';
+    if (lowerAddr.includes('negeri sembilan') || lowerAddr.includes('seremban') || lowerAddr.includes('nilai')) return 'N. Sembilan';
+    if (lowerAddr.includes('perak') || lowerAddr.includes('ipoh') || lowerAddr.includes('taiping')) return 'Perak';
+    if (lowerAddr.includes('kedah')) return 'Kedah';
+    if (lowerAddr.includes('pahang') || lowerAddr.includes('kuantan')) return 'Pahang';
+    if (lowerAddr.includes('terengganu')) return 'Terengganu';
+    if (lowerAddr.includes('kelantan')) return 'Kelantan';
+
+    // Fallback based on typical Central area if no state found
+    if (lowerAddr.includes('puchong') || lowerAddr.includes('bangi') || lowerAddr.includes('cyberjaya')) return 'Selangor';
+    if (lowerAddr.includes('cheras')) return 'K. Lumpur';
+
+    return 'Other'; // Or 'Unknown'
+};
+
 // -- AI Factory Scoring Logic --
 
 // Approximation of "score" based on Zone (0-100)
