@@ -1,10 +1,6 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://kdahubyhwndgyloaljak.supabase.co";
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtkYWh1Ynlod25kZ3lsb2FsamakIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUzODY4ODksLCJleHAiOjIwODA5NjI4ODl9.mzTtQ6zpfvRY07372UH_M4dvKPzHBDkiydwosUYPs-8";
-const supabase = createClient(supabaseUrl, supabaseKey);
-
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Enable CORS
     res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -14,6 +10,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
     }
+
+    // Debug Ping
+    if (req.query.ping) {
+        return res.status(200).json({ status: 'pong', env: process.env.VITE_SUPABASE_URL ? 'set' : 'unset' });
+    }
+
+    const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://kdahubyhwndgyloaljak.supabase.co";
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtkYWh1Ynlod25kZ3lsb2FsamakIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUzODY4ODksLCJleHAiOjIwODA5NjI4ODl9.mzTtQ6zpfvRY07372UH_M4dvKPzHBDkiydwosUYPs-8";
+
+    // Lazy init
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
     if (req.method !== 'GET') {
         return res.status(405).json({ error: 'Method Not Allowed' });
