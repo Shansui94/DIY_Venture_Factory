@@ -10,11 +10,7 @@ module.exports = async (req, res) => {
             return res.status(200).end();
         }
 
-        const { mac, ping } = req.query;
-
-        if (ping) {
-            return res.status(200).json({ status: 'js_pong', env: !!process.env.VITE_SUPABASE_URL });
-        }
+        const { mac } = req.query;
 
         const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://kdahubyhwndgyloaljak.supabase.co";
         const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtkYWh1Ynlod25kZ3lsb2FsamFrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUzODY4ODksImV4cCI6MjA4MDk2Mjg4OX0.mzTtQ6zpfvRY07372UH_M4dvKPzHBDkiydwosUYPs-8";
@@ -62,6 +58,6 @@ module.exports = async (req, res) => {
         return res.status(200).json(data);
 
     } catch (e) {
-        return res.status(200).json({ error: true, message: e.message, stack: e.stack });
+        return res.status(200).json({ error: true, message: e.message });
     }
 };
