@@ -8,23 +8,5 @@
             "source": "/(.*)",
             "destination": "/index.html"
         }
-    ],
-    "functions": {
-        "api/agent/chat.ts": {
-            "maxDuration": 60,
-            "memory": 1024
-        },
-        "api/agent/vision.ts": {
-            "maxDuration": 60,
-            "memory": 1024
-        },
-        "api/agent/parse-text.ts": {
-            "maxDuration": 60,
-            "memory": 1024
-        },
-        "api/agent/debug-models.ts": {
-            "maxDuration": 60,
-            "memory": 1024
-        }
-    }
+    ]
 }
