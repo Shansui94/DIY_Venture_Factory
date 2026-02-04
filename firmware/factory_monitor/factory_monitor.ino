@@ -14,18 +14,18 @@
 const char *ssid = "ESBL_2.4GHz";
 const char *password = "88888888";
 
+// --- NEW: VERCEL DYNAMIC CONFIG ---
+const String configApiUrl = "https://packsecure-os.vercel.app/api/iot?mac=";
+
 // --- SERVER CONFIGURATION ---
-const char *serverUrl =
+const char *supabaseUrl =
     "https://kdahubyhwndgyloaljak.supabase.co/rest/v1/production_logs";
 const char *apiKey =
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
-    "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtkYWh1Ynlod25kZ3lsb2FsamFrIiwicm9sZSI6Im"
-    "Fub24iLCJpYXQiOjE3NjUzODY4ODksImV4cCI6MjA4MDk2Mjg4OX0.mzTtQ6zpfvRY07372UH_"
+    "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtkYWh1Ynlod25kZ3lsb2FsamakIiwicm9sZSI6Im"
+    "Fub24iLCJpYXQiOjE3NjUzODY4ODksLCJleHAiOjIwODA5NjI4ODl9."
+    "mzTtQ6zpfvRY07372UH_"
     "M4dvKPzHBDkiydwosUYPs-8";
-
-// --- NEW: VERCEL DYNAMIC CONFIG ---
-const String configApiUrl =
-    "https://packsecure-os.vercel.app/api/iot-config?mac=";
 
 // --- MACHINE CONFIGURATION ---
 String machineId =
@@ -273,7 +273,7 @@ bool sendToSupabase(int count, time_t timestamp) {
   HTTPClient http;
   WiFiClientSecure client;
   client.setInsecure();
-  if (!http.begin(client, serverUrl))
+  if (!http.begin(client, supabaseUrl))
     return false;
   http.setTimeout(5000);
   http.addHeader("Content-Type", "application/json");
