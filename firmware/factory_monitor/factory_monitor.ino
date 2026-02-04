@@ -16,7 +16,7 @@ const char *password = "88888888";
 
 // 2. Vercel API (Dynamic Config)
 const String configApiUrl =
-    "https://packsecure-os.vercel.app/api/active-products?mac=";
+    "https://packsecure-os.vercel.app/api/iot-config?mac=";
 
 // --- SERVER CONFIGURATION ---
 const char *supabaseUrl =

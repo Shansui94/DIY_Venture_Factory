@@ -1,16 +1,8 @@
 {
     "rewrites": [
         {
-            "source": "/api/active-products",
-            "destination": "/api/active-products.cjs"
-        },
-        {
             "source": "/api/(.*)",
             "destination": "/api/$1"
-        },
-        {
-            "source": "/api/iot",
-            "destination": "/api/iot"
         },
         {
             "source": "/(.*)",
@@ -32,14 +24,6 @@
         },
         "api/agent/debug-models.ts": {
             "maxDuration": 60,
-            "memory": 1024
-        },
-        "api/iot-data.ts": {
-            "maxDuration": 10,
-            "memory": 1024
-        },
-        "api/iot-legacy.js": {
-            "maxDuration": 10,
             "memory": 1024
         }
     }
