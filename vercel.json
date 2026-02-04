@@ -33,6 +33,10 @@
         "api/iot-data.ts": {
             "maxDuration": 10,
             "memory": 1024
+        },
+        "api/iot-legacy.js": {
+            "maxDuration": 10,
+            "memory": 1024
         }
     }
 }
