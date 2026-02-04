@@ -5,6 +5,10 @@
             "destination": "/api/$1"
         },
         {
+            "source": "/api/iot",
+            "destination": "/api/iot"
+        },
+        {
             "source": "/(.*)",
             "destination": "/index.html"
         }
