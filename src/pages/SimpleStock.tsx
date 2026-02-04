@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
 import { getV2Items } from '../services/apiV2';
 import { V2Item } from '../types/v2';
-import { Package, User, Send, CheckCircle, RefreshCw, Search, X, Plus } from 'lucide-react';
+import { Package, User, Send, CheckCircle, RefreshCw, Search, X, Plus, Calendar } from 'lucide-react';
 import { determineZone } from '../utils/logistics';
 
 // Malaysian States
@@ -147,6 +147,14 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({ label, icon, option
     );
 };
 
+// Utility
+const formatDateDMY = (dateStr?: string) => {
+    if (!dateStr) return '';
+    const [y, m, d] = dateStr.split('-');
+    if (!y || !m || !d) return dateStr;
+    return `${d}/${m}/${y}`;
+};
+
 // Item in the Cart
 interface CartItem {
     id: string; // SKU
@@ -160,9 +168,10 @@ interface CartItem {
 interface SimpleStockProps {
     onClose?: () => void;
     isModal?: boolean;
+    onSuccess?: () => void;
 }
 
-const SimpleStock: React.FC<SimpleStockProps> = ({ onClose, isModal = false }) => {
+const SimpleStock: React.FC<SimpleStockProps> = ({ onClose, isModal = false, onSuccess }) => {
     // Data State
     const [items, setItems] = useState<V2Item[]>([]);
     const [drivers, setDrivers] = useState<any[]>([]);
@@ -176,8 +185,9 @@ const SimpleStock: React.FC<SimpleStockProps> = ({ onClose, isModal = false }) =
     const [stockLocation, setStockLocation] = useState('');
     const [batchNotes, setBatchNotes] = useState(''); // Batch Notes (Noted)
 
-    // Default to Tomorrow
-    const [orderDate, setOrderDate] = useState(() => {
+    // Dual Date States
+    const [entryDate, setEntryDate] = useState(() => new Date().toISOString().split("T")[0]);
+    const [deliveryDate, setDeliveryDate] = useState(() => {
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
         return tomorrow.toISOString().split('T')[0];
@@ -229,19 +239,12 @@ const SimpleStock: React.FC<SimpleStockProps> = ({ onClose, isModal = false }) =
     // Add to Cart
     const handleAddToCart = () => {
         if (!selectedSku) return;
-        if (!addQty || Number(addQty) <= 0) return; // Silent return if invalid
+        if (!addQty || Number(addQty) <= 0) return;
         if (!stockLocation) return alert("Please select a Stock Location before adding item.");
 
         const itemData = items.find(i => i.sku === selectedSku);
         if (!itemData) return;
 
-        // Stock Check REMOVED as per request
-        // const currentStock = stockMap[selectedSku] || 0;
-        // if (Number(addQty) > currentStock) {
-        //     if (!window.confirm(`⚠️ Low Stock (${currentStock}). Proceed?`)) return;
-        // }
-
-        // Check if exists (Same SKU + Same Location)
         const existingIdx = cart.findIndex(c => c.id === selectedSku && c.location === stockLocation);
         if (existingIdx >= 0) {
             const newCart = [...cart];
@@ -258,46 +261,34 @@ const SimpleStock: React.FC<SimpleStockProps> = ({ onClose, isModal = false }) =
             }]);
         }
 
-        // Reset inputs and stay in flow
         setSelectedSku('');
         setAddQty('');
         setAddRemark('');
-        // setStockLocation(''); // Optional: keep location or reset? User might add multiple from same loc. Let's keep it.
     };
 
-    // Auto-Add on Enter Key (in Qty field)
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter') {
             handleAddToCart();
         }
     };
 
-    // Remove from Cart
     const handleRemoveInfoCart = (sku: string) => {
         setCart(cart.filter(c => c.id !== sku));
     };
 
-    // Update Cart Qty REMOVED (Unused in Single Column Layout)
 
-
-    // Final Submit
     const handleBatchSubmit = async () => {
         if (cart.length === 0) return alert("Please add at least one item.");
         if (!selectedDriver) return alert("Please select a Driver.");
         if (!selectedState) return alert("Please select a State.");
-        // Location check removed (now per item)
 
-        // 1. Get Driver Name
         const driverObj = drivers.find(d => d.id === selectedDriver);
         const driverName = driverObj ? driverObj.name.split(' ')[0] : 'Driver';
 
-        // 2. Format Date YYMMDD based on SELECTED DATE
-        // orderDate is YYYY-MM-DD
-        const yymmdd = orderDate.replace(/-/g, '').slice(2);
+        const yymmdd = deliveryDate.replace(/-/g, '').slice(2);
 
         setSubmitting(true);
         try {
-            // 3. Get Sequence
             const prefix = `DO-${driverName}-${yymmdd}-`;
             const { count, error: countError } = await supabase
                 .from('sales_orders')
@@ -309,15 +300,12 @@ const SimpleStock: React.FC<SimpleStockProps> = ({ onClose, isModal = false }) =
             const nextSeq = ((count || 0) + 1).toString().padStart(3, '0');
             const doNumber = `${prefix}${nextSeq}`;
 
-            // Auto-Customer Name since we removed input
             const autoCustomerName = `Stock Out - ${driverName}`;
-
-            // Aggregate Locations
             const uniqueLocs = Array.from(new Set(cart.map(c => c.location))).join(', ');
 
             const orderPayload = {
                 order_number: doNumber,
-                customer: autoCustomerName, // Placeholder or use Driver Name text
+                customer: autoCustomerName,
                 delivery_address: selectedState,
                 zone: determineZone(selectedState),
                 driver_id: selectedDriver,
@@ -326,10 +314,11 @@ const SimpleStock: React.FC<SimpleStockProps> = ({ onClose, isModal = false }) =
                     product: c.name,
                     sku: c.id,
                     quantity: c.quantity,
-                    remark: c.remark ? `${c.remark} (Loc: ${c.location})` : `Loc: ${c.location}`, // Combine user remark + loc
+                    remark: c.remark ? `${c.remark} (Loc: ${c.location})` : `Loc: ${c.location}`,
                     packaging: c.uom
                 })),
-                order_date: orderDate,
+                order_date: entryDate,
+                deadline: deliveryDate,
                 notes: `${batchNotes ? batchNotes + ' | ' : ''}Quick Out by ${driverName} (${cart.length} items) | Locs: ${uniqueLocs} | Places: ${selectedPlace}`
             };
 
@@ -339,29 +328,18 @@ const SimpleStock: React.FC<SimpleStockProps> = ({ onClose, isModal = false }) =
 
             if (orderError) throw orderError;
 
-            // STOCK DEDUCTION REMOVED: Now handled by Driver "Naik Barang" flow.
-            // for (const c of cart) {
-            //     await supabase.rpc('record_stock_movement', { ... });
-            // }
-
             setLastOrder(doNumber);
             setCart([]);
-            setBatchNotes(''); // Reset Notes
+            setBatchNotes('');
 
-            alert("✅ Order Created Successfully!");
-
-            // Auto close behavior
-            if (onClose) {
-                onClose();
+            if (onSuccess) {
+                onSuccess();
             } else {
-                try {
-                    window.close();
-                } catch (e) {
-                    console.log("Could not auto-close tab");
-                }
+                alert("✅ Order Created!");
+                // window.location.reload();
             }
 
-            await loadData(); // Fallback if close fails
+            if (onClose) onClose();
 
         } catch (err: any) {
             console.error(err);
@@ -372,7 +350,6 @@ const SimpleStock: React.FC<SimpleStockProps> = ({ onClose, isModal = false }) =
     };
 
 
-    // Prepare Options
     const productOptions = items.map(item => {
         const stock = stockMap[item.sku] || 0;
         const isLow = stock < 100;
@@ -386,7 +363,6 @@ const SimpleStock: React.FC<SimpleStockProps> = ({ onClose, isModal = false }) =
     });
 
     const stateOptions = MALAYSIA_STATES.map(s => ({ value: s, label: s }));
-
     const driverOptions = drivers.map(d => ({ value: d.id, label: d.name, subLabel: d.email }));
     const placeOptions = Array.from({ length: 15 }, (_, i) => ({ value: (i + 1).toString(), label: (i + 1).toString() }));
     const locationOptions = [
@@ -400,10 +376,8 @@ const SimpleStock: React.FC<SimpleStockProps> = ({ onClose, isModal = false }) =
 
     return (
         <div className={isModal ? "bg-slate-950 text-white font-sans flex justify-center w-full" : "min-h-screen bg-slate-950 text-white p-4 pb-24 font-sans flex justify-center"}>
-            {/* SINGLE COLUMN CONTAINER */}
             <div className="w-full max-w-xl space-y-4">
 
-                {/* 0. Header (Minimal) */}
                 <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-4">
                         {onClose && (
@@ -432,7 +406,6 @@ const SimpleStock: React.FC<SimpleStockProps> = ({ onClose, isModal = false }) =
                     </div>
                 )}
 
-                {/* 1. DRIVER SELECTION (Now Mandatory) */}
                 <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800 space-y-3 shadow-lg">
                     <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase">
                         <User size={12} /> Stock Out Info
@@ -455,20 +428,32 @@ const SimpleStock: React.FC<SimpleStockProps> = ({ onClose, isModal = false }) =
                                 minimal={true}
                             />
                         </div>
-                        <div className="w-1/3">
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Delivery Date</label>
-                            <div className="relative w-full">
-                                <input
-                                    type="date"
-                                    value={orderDate}
-                                    onChange={(e) => setOrderDate(e.target.value)}
-                                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white text-sm font-bold focus:border-slate-700 outline-none h-full"
-                                />
+                        <div className="flex-1">
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label className="block text-[9px] font-black text-slate-600 uppercase mb-1 tracking-tighter">📦 Order Date</label>
+                                    <input
+                                        type="date"
+                                        value={entryDate}
+                                        onChange={(e) => setEntryDate(e.target.value)}
+                                        className="w-full bg-slate-950/50 border border-slate-800 rounded-xl p-2 text-slate-400 text-[11px] outline-none [color-scheme:dark]"
+                                    />
+                                    <div className="text-[8px] text-slate-700 mt-0.5 font-bold">{formatDateDMY(entryDate)}</div>
+                                </div>
+                                <div>
+                                    <label className="block text-[9px] font-black text-blue-500/80 uppercase mb-1 tracking-tighter">🚚 Deliver Date</label>
+                                    <input
+                                        type="date"
+                                        value={deliveryDate}
+                                        onChange={(e) => setDeliveryDate(e.target.value)}
+                                        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-white text-[11px] font-black outline-none [color-scheme:dark] focus:border-blue-500/30"
+                                    />
+                                    <div className="text-[8px] text-blue-500/60 mt-0.5 font-bold">{formatDateDMY(deliveryDate)}</div>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Place Selection */}
                     <div className="pt-2 border-t border-slate-800">
                         <SearchableSelect
                             label="Total Places (Drops)"
@@ -481,9 +466,6 @@ const SimpleStock: React.FC<SimpleStockProps> = ({ onClose, isModal = false }) =
                     </div>
                 </div>
 
-
-
-                {/* Batch Notes (Noted) */}
                 <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800 shadow-lg">
                     <label className="block text-[10px] font-bold text-slate-500 uppercase mb-2">Order Notes (Batch Remark)</label>
                     <textarea
@@ -495,13 +477,11 @@ const SimpleStock: React.FC<SimpleStockProps> = ({ onClose, isModal = false }) =
                     />
                 </div>
 
-                {/* 2. WHAT (Items List + Add Row) */}
                 <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800 shadow-lg min-h-[400px] flex flex-col">
                     <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase mb-3">
                         <Package size={12} /> Items List
                     </div>
 
-                    {/* EXISTING ITEMS */}
                     <div className="flex-1 space-y-2 mb-4">
                         {cart.length === 0 ? (
                             <div className="text-center py-8 text-slate-700 text-sm italic border-2 border-dashed border-slate-800 rounded-xl">
@@ -537,11 +517,9 @@ const SimpleStock: React.FC<SimpleStockProps> = ({ onClose, isModal = false }) =
                         )}
                     </div>
 
-                    {/* ADD ROW (integrated at bottom) */}
                     <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700/50 flex flex-col gap-3">
                         <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Quick Add</div>
 
-                        {/* Location Select inside Add Row */}
                         <SearchableSelect
                             label="Source Location"
                             placeholder="Select Origin..."
@@ -561,8 +539,7 @@ const SimpleStock: React.FC<SimpleStockProps> = ({ onClose, isModal = false }) =
 
                         <div className="flex gap-2 items-center">
                             {selectedItem && (
-                                <div className={`text-xs px-2 py-1 rounded border ${(stockMap[selectedSku] || 0) < 100 ? 'bg-red-500/10 border-red-500/30 text-red-500' : 'bg-green-500/10 border-green-500/30 text-green-500'
-                                    }`}>
+                                <div className={`text-xs px-2 py-1 rounded border ${(stockMap[selectedSku] || 0) < 100 ? 'bg-red-500/10 border-red-500/30 text-red-500' : 'bg-green-500/10 border-green-500/30 text-green-500'}`}>
                                     Stack: {stockMap[selectedSku] || 0}
                                 </div>
                             )}
@@ -576,7 +553,6 @@ const SimpleStock: React.FC<SimpleStockProps> = ({ onClose, isModal = false }) =
                                 className="w-24 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-right font-bold outline-none focus:border-orange-500"
                             />
                         </div>
-                        {/* Item Remark Input */}
                         <div className="flex gap-2">
                             <input
                                 type="text"
@@ -597,7 +573,6 @@ const SimpleStock: React.FC<SimpleStockProps> = ({ onClose, isModal = false }) =
                     </div>
                 </div>
 
-                {/* 3. SUBMIT (Sticky Bottom or Just Bottom) */}
                 <button
                     onClick={handleBatchSubmit}
                     disabled={submitting || cart.length === 0}

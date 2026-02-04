@@ -47,6 +47,17 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
     const [isLiveRun, setIsLiveRun] = useState(false);
     const [liveCount, setLiveCount] = useState(0);
     const [activeSku, setActiveSku] = useState<string | null>(null);
+    const [selectedRolls, setSelectedRolls] = useState<number>(1);
+
+    // Auto-update packaging color when rolls count changes (e.g. for scattered rolls)
+    useEffect(() => {
+        if (selectedSize) {
+            const pack = getRecommendedPackaging(selectedLayer, selectedMaterial, selectedSize, selectedRolls);
+            if (pack !== derivedPackaging) {
+                setDerivedPackaging(pack);
+            }
+        }
+    }, [selectedRolls, selectedSize, selectedLayer, selectedMaterial]);
 
     // ... (Keep handlers)
     const handleTypeSelect = (layer: ProductLayer, material: ProductMaterial) => {
@@ -57,8 +68,23 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
 
     const handleSizeSelect = (size: ProductSize) => {
         setSelectedSize(size);
-        const pack = getRecommendedPackaging(selectedLayer, selectedMaterial, size);
+        // Set default rolls based on size
+        const numericSize = parseInt(size.replace(/[^0-9]/g, '')) || 100;
+        const machineWidth = 100; // Fixed per user instructions
+        const maxRollsAcross = Math.floor(machineWidth / numericSize) || 1;
+
+        const defaultRolls = size === '100cm' ? 1 :
+            size === '50cm' ? 2 :
+                size === '33cm' ? 3 :
+                    size === '25cm' ? 4 : 5;
+
+        // Ensure default doesn't exceed physical machine capacity
+        const finalDefault = Math.min(defaultRolls, maxRollsAcross);
+        setSelectedRolls(finalDefault);
+
+        const pack = getRecommendedPackaging(selectedLayer, selectedMaterial, size, defaultRolls);
         setDerivedPackaging(pack);
+
         setStep(3);
         setIsLiveRun(false);
         setLiveCount(0);
@@ -85,7 +111,15 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
                 alert("Error: Packaging or Size not selected.");
                 return;
             }
-            const v3Sku = getBubbleWrapSku(selectedLayer, selectedMaterial, selectedSize);
+            const v3Sku = getBubbleWrapSku(selectedLayer, selectedMaterial, selectedSize, selectedRolls, derivedPackaging);
+
+            // DYNAMIC YIELD LOGIC: (BaseWidth / ProductWidth) / Rolls
+            // Example: (100 / 33) / 3 = 1 pulse per bundle
+            // Example: (100 / 33) / 1 = 3 pulses per individual roll (Yield=3)
+            const numericSize = parseInt(selectedSize.replace(/[^0-9]/g, '')) || 100;
+            const machineBaseWidth = 100; // Default to 1m
+            const calculatedYield = Math.floor((machineBaseWidth / numericSize) / selectedRolls) || 1;
+
             try {
                 const machineId = machineMetadata?.id || 'T1.2-M01';
                 const dbLaneId = laneId;
@@ -93,6 +127,8 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
                     machine_id: machineId,
                     lane_id: dbLaneId,
                     product_sku: v3Sku,
+                    cutting_size: numericSize,
+                    yield: calculatedYield,
                     updated_at: new Date()
                 });
                 if (error) throw error;
@@ -332,13 +368,40 @@ const ProductionLane: React.FC<ProductionLaneProps> = ({ laneId, machineMetadata
                             )}
 
                             {/* Note Input */}
-                            <input
-                                type="text"
-                                placeholder="Note (Optional)"
-                                value={productionNote}
-                                onChange={(e) => setProductionNote(e.target.value)}
-                                className="w-full bg-black/30 text-white text-xs px-3 py-2 rounded-xl border border-white/10 focus:border-cyan-500 focus:outline-none"
-                            />
+                            <div className="flex gap-2">
+                                <div className="flex items-center bg-black/40 border border-white/10 rounded-xl px-2 gap-2">
+                                    <span className="text-[10px] text-gray-500 font-bold uppercase">Pack x</span>
+                                    <div className="flex items-center gap-3">
+                                        <button
+                                            onClick={() => setSelectedRolls(Math.max(1, selectedRolls - 1))}
+                                            className="w-6 h-6 rounded bg-white/5 hover:bg-white/10 flex items-center justify-center text-xs"
+                                        >-</button>
+                                        <span className="text-sm font-black text-white w-4 text-center">{selectedRolls}</span>
+                                        <button
+                                            onClick={() => {
+                                                const numericSize = parseInt(selectedSize?.replace(/[^0-9]/g, '') || '100');
+                                                const maxRolls = Math.floor(100 / numericSize) || 1;
+                                                if (selectedRolls < maxRolls) {
+                                                    setSelectedRolls(selectedRolls + 1);
+                                                }
+                                            }}
+                                            disabled={(() => {
+                                                const numericSize = parseInt(selectedSize?.replace(/[^0-9]/g, '') || '100');
+                                                const maxRolls = Math.floor(100 / numericSize) || 1;
+                                                return selectedRolls >= maxRolls;
+                                            })()}
+                                            className="w-6 h-6 rounded bg-white/5 hover:bg-white/10 flex items-center justify-center text-xs disabled:opacity-20 disabled:cursor-not-allowed"
+                                        >+</button>
+                                    </div>
+                                </div>
+                                <input
+                                    type="text"
+                                    placeholder="Note (Optional)"
+                                    value={productionNote}
+                                    onChange={(e) => setProductionNote(e.target.value)}
+                                    className="flex-1 bg-black/30 text-white text-xs px-3 py-2 rounded-xl border border-white/10 focus:border-cyan-500 focus:outline-none"
+                                />
+                            </div>
 
                             {/* RUN CONTROLS */}
                             <div className="flex-1 flex flex-col items-center justify-center gap-4">

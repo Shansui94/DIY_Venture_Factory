@@ -3,44 +3,34 @@ import { ProductLayer, ProductMaterial, ProductSize, PackagingColor } from '../t
 export const getRecommendedPackaging = (
     layer: ProductLayer,
     material: ProductMaterial,
-    size: ProductSize
+    size: ProductSize,
+    rolls?: number
 ): PackagingColor => {
-    // 1. Single Layer Logic
-    if (layer === 'Single') {
-        if (material === 'Black') {
-            // Hitam Single Layer
-            // 1M -> Hijau
-            if (size === '100cm') return 'Green';
-            // 50cm -> Merah
-            if (size === '50cm') return 'Pink';
-            // 33, 25, 20 -> Hijau
-            return 'Green';
-        } else {
-            // Clear / Standard
-            // 1M -> Merah
-            if (size === '100cm') return 'Pink';
-            // 50cm -> Oren
-            if (size === '50cm') return 'Orange';
-            // 33, 25, 20 -> Hijau
-            return 'Green';
-        }
+    // 1. 散装/闪装 (Loose/Scattered) 优先逻辑：
+    // 如果是小尺寸 (非 100cm) 且选了 x1 (散装)，使用透明小袋
+    if (size !== '100cm' && rolls === 1) {
+        return 'Transparent';
     }
 
-    // 2. Double Layer Logic
-    else {
+    // 2. 只有在此基础上，才应用标准捆装的颜色逻辑
+    if (layer === 'Single') {
         if (material === 'Black') {
-            // Double Layer Hitam
-            // 1M -> Merah
-            if (size === '100cm') return 'Pink';
-            // 50cm -> Hijau
-            if (size === '50cm') return 'Green';
-            // 33, 25, 20 -> Merah
-            return 'Pink';
+            // 单层黑 100cm -> Green, 50cm -> Pink, 其他 -> Green
+            if (size === '100cm') return 'Green';
+            return size === '50cm' ? 'Pink' : 'Green';
         } else {
-            // Double Layer Clear / Standard
-            // 1M -> Kuning
+            // 单层透明 100cm -> Pink, 50cm -> Orange, 其他 -> Green
+            if (size === '100cm') return 'Pink';
+            return size === '50cm' ? 'Orange' : 'Green';
+        }
+    } else {
+        if (material === 'Black') {
+            // 双层黑 100cm -> Pink, 50cm -> Green, 其他 -> Pink
+            if (size === '100cm') return 'Pink';
+            return size === '50cm' ? 'Green' : 'Pink';
+        } else {
+            // 双层透明 100cm -> Yellow, 其他 -> Blue
             if (size === '100cm') return 'Yellow';
-            // 50, 33, 25, 20 -> Biru
             return 'Blue';
         }
     }

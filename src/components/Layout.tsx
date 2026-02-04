@@ -13,11 +13,15 @@ import {
     Scan,
     Truck,
     Package,
+    Calendar,
     FileCheck,
     Database,
     FileText,
     FlaskConical,
-    Sparkles // Added for AI Hub
+    Sparkles,
+    Wrench,
+    Cpu,
+    FileBarChart
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -87,20 +91,25 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
         );
     };
 
+    // Check if we should show the global mobile header
+    const hideGlobalMobileHeader = ([] as string[]).includes(activePage);
+
     return (
         <div className="min-h-screen bg-[#121215] text-gray-200 font-sans selection:bg-blue-500/30">
             {/* Mobile Header (Sticky Glass) */}
-            <div className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-[#121215]/90 backdrop-blur-md border-b border-white/10 flex justify-between items-center px-4 z-50">
-                <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-white font-bold shadow-lg shadow-blue-900/40">
-                        V
+            {!hideGlobalMobileHeader && (
+                <div className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-[#121215]/90 backdrop-blur-md border-b border-white/10 flex justify-between items-center px-4 z-50">
+                    <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center text-green-500 font-bold shadow-lg shadow-green-900/40">
+                            P
+                        </div>
+                        <span className="font-bold text-lg tracking-tight text-white">PackSecure</span>
                     </div>
-                    <span className="font-bold text-lg tracking-tight text-white">Venture OS</span>
+                    <button onClick={toggleMobileMenu} className="p-2 text-gray-400 active:text-white">
+                        {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+                    </button>
                 </div>
-                <button onClick={toggleMobileMenu} className="p-2 text-gray-400 active:text-white">
-                    {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-                </button>
-            </div>
+            )}
 
             <div className="flex h-screen overflow-hidden pt-16 lg:pt-0">
                 {/* Sidebar Navigation */}
@@ -129,6 +138,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                             <NavGroup title="Vivian Workspace">
                                 <NavItem id="livestock" icon={BarChart3} label="Live Stock" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 <NavItem id="delivery" icon={Truck} label="Delivery Orders" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                <NavItem id="maintenance" icon={Wrench} label="Maintenance Control" roles={['SuperAdmin', 'Admin', 'Manager']} />
                             </NavGroup>
                         )}
 
@@ -159,6 +169,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                 <NavGroup title="Logistics">
                                     <NavItem id="delivery" icon={Truck} label="Delivery Orders" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="dispatch" icon={Truck} label="Dispatch" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="maintenance" icon={Wrench} label="Maintenance Control" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="lorry-management" icon={Truck} label="Lorry Fleet" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="loading-dock" icon={ClipboardList} label="Loading Dock" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="production" icon={Database} label="Production Logs" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="report-history" icon={FileText} label="Reports" roles={['SuperAdmin', 'Admin', 'Manager']} />
@@ -166,7 +178,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
 
                                 <NavGroup title="Organization">
                                     <NavItem id="hr" icon={Users} label="HR Portal" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                    <NavItem id="users" icon={Users} label="User Management" roles={['SuperAdmin', 'Admin']} />
+                                    <NavItem id="reports" icon={FileBarChart} label="EXECUTIVE REPORTS" roles={['SuperAdmin', 'Manager']} />
+                                    <NavItem id="iot" icon={Cpu} label="IOT SETTINGS" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <div className="h-4" />
                                     <NavItem id="claims" icon={FileCheck} label="Claims" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 </NavGroup>
                             </>
@@ -177,6 +191,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                             <NavGroup title="Driver Workspace">
                                 <NavItem id="delivery-driver" icon={Package} label="My Delivery" roles={['Driver']} />
                                 <NavItem id="delivery-history" icon={ClipboardList} label="My History" roles={['Driver']} />
+                                <NavItem id="driver-leave" icon={Calendar} label="Apply Cuti" roles={['Driver']} />
+                                <NavItem id="lorry-service" icon={Truck} label="Lorry Service" roles={['Driver']} />
                                 <NavItem id="claims" icon={FileCheck} label="My Claims" roles={['Driver']} />
                             </NavGroup>
                         )}

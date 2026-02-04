@@ -146,7 +146,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
                     {!isForgotPassword && (
                         <>
                             <div className="flex justify-center mb-6">
-                                <img src="/packsecure-logo.jpg" alt="PackSecure" className="h-16 rounded-xl shadow-lg border border-white/10" />
+                                <img src="/packsecure-logo.jpg" alt="PackSecure" className="h-32 rounded-xl shadow-lg border border-white/10" />
                             </div>
                             <h1 className="text-3xl font-black text-white tracking-tight mb-2">
                                 {loginMode === 'device' ? 'DEVICE ACCESS' : 'STAFF PORTAL'}

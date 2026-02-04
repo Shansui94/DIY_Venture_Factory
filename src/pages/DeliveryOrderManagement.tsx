@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import * as Dnd from '@hello-pangea/dnd';
+import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { supabase } from '../services/supabase';
 import { getV2Items } from '../services/apiV2';
 import { determineZone, determineState, findBestFactory } from '../utils/logistics';
 import {
     Plus, Search, Calendar, FileText, X, Truck,
-    User as UserIcon, Box, Zap, Trash2
+    User as UserIcon, Box, Zap, Trash2, Scissors, AlertTriangle, MapPin
 } from 'lucide-react';
 import {
     SalesOrder,
-    User
+    User,
+    Lorry
 } from '../types';
 import { V2Item } from '../types/v2';
 
@@ -139,6 +140,7 @@ const DeliveryOrderManagement: React.FC = () => {
     // --- STATE ---
     const [orders, setOrders] = useState<SalesOrder[]>([]);
     const [drivers, setDrivers] = useState<User[]>([]);
+    const [lorries, setLorries] = useState<Lorry[]>([]);
 
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isStockOutOpen, setIsStockOutOpen] = useState(false);
@@ -158,6 +160,25 @@ const DeliveryOrderManagement: React.FC = () => {
     const [orderCustomer, setOrderCustomer] = useState('');
     const [newOrderAddress, setNewOrderAddress] = useState('');
     const [newOrderNotes, setNewOrderNotes] = useState(''); // Batch Note
+    const [currentItemQty, setCurrentItemQty] = useState<number>(0);
+    const [currentItemRemark, setCurrentItemRemark] = useState('');
+    const [selectedV2Item, setSelectedV2Item] = useState<V2Item | null>(null);
+    const [currentItemLoc, setCurrentItemLoc] = useState('SPD'); // New Location state
+
+    // Reassign Driver State
+    const [isReassignModalOpen, setIsReassignModalOpen] = useState(false);
+    const [reassignOrder, setReassignOrder] = useState<SalesOrder | null>(null);
+
+    // Split Order State
+    const [isSplitModalOpen, setIsSplitModalOpen] = useState(false);
+    const [splitOrder, setSplitOrder] = useState<SalesOrder | null>(null);
+    const [splitItems, setSplitItems] = useState<{ [key: number]: number }>({}); // Index -> Qty to transfer
+    const [splitTargetDriverId, setSplitTargetDriverId] = useState('');
+    const [splitTargetDate, setSplitTargetDate] = useState('');
+
+    // Driver Leave State
+    const [driverLeaves, setDriverLeaves] = useState<any[]>([]);
+
 
     // AI Autocomplete State
     // AI Autocomplete State (Unused)
@@ -170,29 +191,33 @@ const DeliveryOrderManagement: React.FC = () => {
 
     // -- Mode A: V2 Search --
     const [v2Items, setV2Items] = useState<V2Item[]>([]);
-    const [itemSearchTerm, setItemSearchTerm] = useState('');
-    const [selectedV2Item, setSelectedV2Item] = useState<V2Item | null>(null);
-
-    // Shared Additional Info
-    const [currentItemRemark, setCurrentItemRemark] = useState('');
-    const [currentItemQty, setCurrentItemQty] = useState(0);
 
     // --- EFFECTS ---
 
     // Fetch Data
     const fetchData = async () => {
-
         try {
-            const [usersRes, ordersRes, itemsRes] = await Promise.all([
+            const [usersRes, ordersRes, itemsRes, leavesRes, lorriesRes] = await Promise.all([
                 supabase.from('users_public').select('*').eq('role', 'Driver'),
-                // Sort by trip_sequence first, then creation date
                 supabase.from('sales_orders').select('*').order('trip_sequence', { ascending: true }).order('created_at', { ascending: false }),
                 getV2Items(),
-                // supabase.from('sys_customers').select('*') // Unused
+                supabase.from('driver_leave').select('*'),
+                supabase.from('lorries').select('*')
             ]);
 
-            // if (customersRes.data) setCustomerDB(customersRes.data);
+            if (leavesRes.data) setDriverLeaves(leavesRes.data);
             if (itemsRes) setV2Items(itemsRes);
+            if (lorriesRes.data) {
+                const mappedLorries: Lorry[] = lorriesRes.data.map(l => ({
+                    id: l.id,
+                    plateNumber: l.plate_number,
+                    driverName: l.driver_name || 'No Driver',
+                    driverUserId: l.driver_id || '',
+                    preferredZone: l.preferred_zone || 'Not Specified',
+                    status: l.status || 'Available'
+                }));
+                setLorries(mappedLorries);
+            }
 
             if (usersRes.data) {
                 const mappedDrivers: User[] = usersRes.data.map(u => ({
@@ -214,10 +239,10 @@ const DeliveryOrderManagement: React.FC = () => {
                     status: o.status,
                     orderDate: o.order_date,
                     deadline: o.deadline,
-                    notes: o.notes, // Map notes
+                    notes: o.notes,
                     zone: o.zone,
                     deliveryAddress: o.delivery_address,
-                    tripSequence: o.trip_sequence || 0 // Map sequence
+                    tripSequence: o.trip_sequence || 0
                 }));
                 setOrders(mappedOrders);
             }
@@ -226,14 +251,53 @@ const DeliveryOrderManagement: React.FC = () => {
         }
     };
 
+    const formatDateDMY = (dateStr?: string) => {
+        if (!dateStr) return '';
+        const [y, m, d] = dateStr.split('-');
+        if (!y || !m || !d) return dateStr;
+        return `${d}/${m}/${y}`;
+    };
+
+    const checkLeaveConflict = (driverId: string, orderDateStr?: string) => {
+        if (!driverId || driverId === 'unassigned') return true; // Fix: was return false
+
+        const targetDateStr = orderDateStr || new Date().toISOString().split('T')[0];
+        const driverName = drivers.find(d => d.uid === driverId)?.name || 'Driver';
+
+        // Check for exact date match
+        const conflict = driverLeaves.filter(l => l.status !== 'Rejected').find(l => {
+            if (l.driver_id !== driverId) return false;
+            return targetDateStr >= l.start_date && targetDateStr <= l.end_date;
+        });
+
+        if (conflict) {
+            return window.confirm(`⚠️ WARNING: ${driverName} has leave from ${formatDateDMY(conflict.start_date)} to ${formatDateDMY(conflict.end_date)}.\n\nThis trip date (${formatDateDMY(targetDateStr)}) is during their leave.\n\nStill assign?`);
+        }
+
+        // Near-future Warning (3 days before leave starts)
+        const targetDateObj = new Date(targetDateStr);
+        const nearConflict = driverLeaves.filter(l => l.status !== 'Rejected').find(l => {
+            if (l.driver_id !== driverId) return false;
+            const start = new Date(l.start_date);
+            const bufferDate = new Date(start);
+            bufferDate.setDate(start.getDate() - 3);
+            return targetDateObj >= bufferDate && targetDateObj < start;
+        });
+
+        if (nearConflict) {
+            return window.confirm(`💡 SMART REMINDER: ${driverName} will be on leave starting ${formatDateDMY(nearConflict.start_date)} (in 3 days or less).\n\nProceed with this assignment?`);
+        }
+        return true;
+    };
+
     useEffect(() => {
         fetchData();
 
         // 1. Subscribe to Orders (Logging Only - Disabled auto-fetch to protect Optimistic UI)
         const orderInfo = supabase.channel('do-changes')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'sales_orders' }, () => {
-                console.log("Realtime: Order changed. (Auto-refresh disabled to prioritize local state safety)");
-                // fetchData();
+                console.log("Realtime: Order changed. Fetching...");
+                fetchData();
             })
             .subscribe();
 
@@ -243,6 +307,7 @@ const DeliveryOrderManagement: React.FC = () => {
                 console.log("Realtime: Driver list changed, fetching...");
                 fetchData(); // Keep this active as adding drivers is rare and safely syncable
             })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_leave' }, () => fetchData())
             .subscribe();
 
         return () => {
@@ -253,16 +318,13 @@ const DeliveryOrderManagement: React.FC = () => {
 
     // Filter Logic
     const filteredOrders = orders.filter(o =>
-        (statusFilter === 'All' || o.status === statusFilter) &&
+        (statusFilter === 'All' ? !['Delivered', 'Cancelled'].includes(o.status) : o.status === statusFilter) &&
         (getDriverName(o.driverId)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             o.orderNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             o.customer.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
-    const filteredV2Items = v2Items.filter(item =>
-    (item.name.toLowerCase().includes(itemSearchTerm.toLowerCase()) ||
-        item.sku.toLowerCase().includes(itemSearchTerm.toLowerCase()))
-    ).slice(0, 50);
+
 
     // Stock Visibility
     const [stockMap, setStockMap] = useState<Record<string, number>>({});
@@ -280,7 +342,7 @@ const DeliveryOrderManagement: React.FC = () => {
 
     // --- HANDLERS ---
 
-    const onDragEnd = async (result: Dnd.DropResult) => {
+    const onDragEnd = async (result: DropResult) => {
         const { destination, source, draggableId } = result;
 
         if (!destination) return;
@@ -296,6 +358,12 @@ const DeliveryOrderManagement: React.FC = () => {
         const newDriverId = destination.droppableId === 'unassigned' ? null : destination.droppableId;
         const oldDriverId = source.droppableId === 'unassigned' ? null : source.droppableId; // Could be 'unassigned' or a user ID
         const orderId = draggableId;
+
+        // Smart Reminder
+        if (newDriverId && newDriverId !== oldDriverId) {
+            const order = orders.find(o => o.id === orderId);
+            if (!checkLeaveConflict(newDriverId, order?.deadline)) return;
+        }
 
         // 1. Get all orders for the DESTINATION driver
         const destinationOrders = filteredOrders
@@ -363,16 +431,20 @@ const DeliveryOrderManagement: React.FC = () => {
         }
     };
 
-    // DELETE ORDER
+    // DELETE ORDER (Soft Delete)
     const handleDeleteOrder = async (orderId: string, orderNumber: string) => {
-        if (!window.confirm(`Are you sure you want to DELETE Order ${orderNumber}?\nThis cannot be undone.`)) return;
+        if (!window.confirm(`Are you sure you want to CANCEL Order ${orderNumber}?\nThis will move it to the Cancelled tab.`)) return;
 
         try {
-            const { error } = await supabase.from('sales_orders').delete().eq('id', orderId);
+            // Soft Delete: Update status to 'Cancelled'
+            const { error } = await supabase.from('sales_orders').update({ status: 'Cancelled' }).eq('id', orderId);
             if (error) throw error;
 
-            // Optimistic Remove
-            setOrders(prev => prev.filter(o => o.id !== orderId));
+            // Optimistic Remove (or move to Cancelled if checking that tab)
+            setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'Cancelled' } : o));
+
+            // Soft Refresh
+            await fetchData();
 
         } catch (err: any) {
             alert("Delete failed: " + err.message);
@@ -430,11 +502,13 @@ const DeliveryOrderManagement: React.FC = () => {
         if (currentItemQty <= 0) return alert("Please enter a valid quantity.");
         if (!selectedV2Item) return alert("Please select a product.");
 
+        const combinedRemark = currentItemLoc ? `${currentItemRemark} (Loc: ${currentItemLoc})`.trim() : currentItemRemark;
+
         const newItem = {
             product: selectedV2Item.name,
             sku: selectedV2Item.sku,
             quantity: currentItemQty,
-            remark: currentItemRemark,
+            remark: combinedRemark.startsWith(' (Loc:') ? combinedRemark.replace(' (Loc:', 'Loc:').replace(')', '') : combinedRemark,
             packaging: (selectedV2Item.uom || 'Unit') as any
         };
 
@@ -442,13 +516,119 @@ const DeliveryOrderManagement: React.FC = () => {
         setCurrentItemQty(0);
         setCurrentItemRemark('');
         setSelectedV2Item(null);
-        setItemSearchTerm('');
     };
 
     const handleRemoveItem = (index: number) => {
         const updated = [...newOrderItems];
         updated.splice(index, 1);
         setNewOrderItems(updated);
+    };
+
+    // REASSIGN DRIVER HANDLER
+    const handleReassignDriver = async (driverId: string) => {
+        if (!reassignOrder) return;
+
+        // Smart Reminder
+        if (!checkLeaveConflict(driverId, reassignOrder.deadline)) return;
+
+        try {
+            // Optimistic Update
+            setOrders(prev => prev.map(o => {
+                if (o.id === reassignOrder.id) {
+                    return { ...o, driverId: driverId };
+                }
+                return o;
+            }));
+
+            // Close Modal
+            setIsReassignModalOpen(false);
+            setReassignOrder(null);
+
+            // DB Update
+            const { error } = await supabase.from('sales_orders').update({ driver_id: driverId }).eq('id', reassignOrder.id);
+            if (error) throw error;
+
+            // alert("Driver updated successfully!"); 
+            // Force Reload for safety
+            window.location.reload();
+
+        } catch (err: any) {
+            alert("Error reassigning driver: " + err.message);
+            // fetchData(); 
+            window.location.reload();
+        }
+    };
+
+    // SPLIT ORDER HANDLER
+    const handleSplitOrder = async () => {
+        if (!splitOrder) return;
+
+        // Validation: Check if anything is being transferred
+        const hasTransfer = Object.values(splitItems).some(qty => qty > 0);
+        if (!hasTransfer) return alert("Please select at least one item to transfer.");
+
+        try {
+            // 1. Calculate New Order Items (Transferred)
+            const newOrderItemsPayload = splitOrder.items.map((item, idx) => {
+                const transferQty = splitItems[idx] || 0;
+                if (transferQty > 0) {
+                    return { ...item, quantity: transferQty };
+                }
+                return null;
+            }).filter(Boolean) as SalesOrder['items'];
+
+            // 2. Calculate Original Order Items (Remaining)
+            const remainingOriginalItems = splitOrder.items.map((item, idx) => {
+                const transferQty = splitItems[idx] || 0;
+                const remainingQty = item.quantity - transferQty;
+                if (remainingQty > 0) {
+                    return { ...item, quantity: remainingQty };
+                }
+                return null; // Remove item if fully transferred
+            }).filter(Boolean) as SalesOrder['items'];
+
+            if (remainingOriginalItems.length === 0) return alert("Cannot transfer all items. Use 'Reassign Driver' instead.");
+
+            // 3. DB Transactions
+            // A. Update Original Order
+            const { error: updateError } = await supabase.from('sales_orders')
+                .update({ items: remainingOriginalItems })
+                .eq('id', splitOrder.id);
+            if (updateError) throw updateError;
+
+            // B. Create New Order
+            // Generate distinct order number suffix
+            const splitOrderNumber = `${splitOrder.orderNumber}-B`;
+
+            const payload = {
+                order_number: splitOrderNumber,
+                customer: splitOrder.customer,
+                delivery_address: splitOrder.deliveryAddress,
+                zone: splitOrder.zone, // Inherit zone
+                factory_id: 'default', // Ideally should fetch original factory_id, simplified for now
+                driver_id: splitTargetDriverId || null,
+                items: newOrderItemsPayload,
+                status: 'New', // Default status for split part
+                order_date: splitOrder.orderDate,
+                deadline: splitTargetDate || splitOrder.deadline,
+                notes: `Split from ${splitOrder.orderNumber}. ${splitOrder.notes || ''}`,
+                trip_sequence: 999
+            };
+
+            const { error: insertError } = await supabase.from('sales_orders').insert(payload);
+            if (insertError) throw insertError;
+
+            // 4. Force Reload (Timeout for safety)
+            setTimeout(() => {
+                window.location.reload();
+            }, 500);
+
+        } catch (err: any) {
+            alert("Error splitting order: " + err.message);
+            setTimeout(() => {
+                window.location.reload();
+            }, 500);
+        }
     };
 
     /*
@@ -462,7 +642,7 @@ const DeliveryOrderManagement: React.FC = () => {
             setShowSuggestions(false);
         }
     };
-
+    
     const handleSelectCustomer = (customer: any) => {
         setOrderCustomer(customer.name);
         setNewOrderAddress(customer.address || '');
@@ -501,10 +681,16 @@ const DeliveryOrderManagement: React.FC = () => {
                 driver_id: selectedDriverId || null,
                 items: newOrderItems,
                 status: 'New',
-                order_date: new Date().toISOString().split('T')[0],
+                order_date: newOrderDate || new Date().toISOString().split("T")[0],
                 deadline: newOrderDeliveryDate || null,
                 notes: newOrderNotes // Include Batch Notes
             };
+
+            // LEAVE CONFLICT CHECK BEFORE SUBMISSION
+            if (payload.driver_id && payload.deadline) {
+                const ok = checkLeaveConflict(payload.driver_id, payload.deadline);
+                if (!ok) return; // User cancelled
+            }
 
             let newOrderObj: SalesOrder | null = null;
 
@@ -532,9 +718,8 @@ const DeliveryOrderManagement: React.FC = () => {
                     });
                 }
                 */
-                alert(`Order Created!\nAssigned to ${bestFactory.name} (Zone: ${zone})`);
+                // alert(`Order Created!\nAssigned to ${bestFactory.name} (Zone: ${zone})`);
 
-                // Optimistic Update: Create
                 if (data) {
                     newOrderObj = {
                         id: data.id,
@@ -550,13 +735,14 @@ const DeliveryOrderManagement: React.FC = () => {
                         deliveryAddress: data.delivery_address,
                         tripSequence: data.trip_sequence || 999
                     };
-                    setOrders(prev => [newOrderObj!, ...prev]);
                 }
             }
 
+            // Close Modal
             handleCloseModal();
-            // Removed automatic fetch to prevent race conditions overwriting optimistic UI
-            // We rely on the optimistic update we just made above.
+
+            // Soft Refresh
+            await fetchData();
 
         } catch (err: any) {
             alert("Error: " + err.message);
@@ -565,7 +751,7 @@ const DeliveryOrderManagement: React.FC = () => {
 
     const handleCloseModal = () => {
         setIsCreateModalOpen(false);
-        setEditingOrderId(null);
+        setEditingOrderId(null); setNewOrderDate('');
         setSelectedDriverId('');
         setOrderCustomer('');
         setNewOrderAddress('');
@@ -601,7 +787,7 @@ const DeliveryOrderManagement: React.FC = () => {
     const handleAIFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-
+    
         setIsAnalyzing(true);
         try {
             const reader = new FileReader();
@@ -609,21 +795,21 @@ const DeliveryOrderManagement: React.FC = () => {
             reader.onload = async () => {
                 const base64Data = reader.result as string;
                 const base64Clean = base64Data.split(',')[1]; // Server expects raw base64
-
+    
                 // Call Server Vision API
                 const response = await fetch('/api/agent/vision', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ imageBase64: base64Clean })
                 });
-
+    
                 if (!response.ok) {
                     const err = await response.json();
                     throw new Error(err.error || 'Server error');
                 }
-
+    
                 const data = await response.json(); // Array of extracted objects
-
+    
                 if (Array.isArray(data) && data.length > 0) {
                     const first = data[0]; // Take first contact found
                     if (first.name) setOrderCustomer(first.name);
@@ -644,14 +830,80 @@ const DeliveryOrderManagement: React.FC = () => {
     */
 
 
+    // Render Helpers
+    // Render Helpers
+    const getLocalDateStr = (d: Date) => {
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+
+    const todayStr = getLocalDateStr(new Date());
+    const within14Days = new Date();
+    within14Days.setDate(within14Days.getDate() + 14);
+    const within14DaysStr = getLocalDateStr(within14Days);
+
+    const driversOnLeaveToday = drivers.filter(d =>
+        driverLeaves.some(l => l.driver_id === d.uid && l.status !== 'Rejected' && todayStr >= l.start_date && todayStr <= l.end_date)
+    );
+
+    const upcomingLeaves = driverLeaves
+        .filter(l => l.status !== 'Rejected' && l.start_date > todayStr && l.start_date <= within14DaysStr)
+        .map(l => ({
+            ...l,
+            driverName: drivers.find(d => d.uid === l.driver_id)?.name || 'Unknown Driver'
+        }))
+        .sort((a, b) => a.start_date.localeCompare(b.start_date));
+
     return (
         <div className="min-h-screen bg-slate-950 text-slate-100 p-6 font-sans selection:bg-blue-500/30">
+            {/* LEAVE & INFO BANNERS */}
+            <div className="flex flex-col gap-3 mb-6">
+                {driversOnLeaveToday.length > 0 && (
+                    <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center justify-between animate-pulse">
+                        <div className="flex items-center gap-3">
+                            <div className="bg-red-500 p-2 rounded-xl text-white">
+                                <AlertTriangle size={20} />
+                            </div>
+                            <div>
+                                <div className="text-sm font-black text-red-400 uppercase tracking-widest leading-none mb-1">Drivers on Holiday Today</div>
+                                <div className="text-xs font-bold text-red-500/80">
+                                    {driversOnLeaveToday.map(d => d.name).join(', ')}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {upcomingLeaves.length > 0 && (
+                    <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="bg-amber-500 p-2 rounded-xl text-white">
+                                <Calendar size={20} />
+                            </div>
+                            <div>
+                                <div className="text-sm font-black text-amber-400 uppercase tracking-widest leading-none mb-1">Upcoming Holidays (Next 2 Weeks)</div>
+                                <div className="text-xs font-bold text-amber-500/80">
+                                    {upcomingLeaves.map(l => `${l.driverName} (${l.start_date})`).join(', ')}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {driversOnLeaveToday.length === 0 && upcomingLeaves.length === 0 && (
+                    <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl flex items-center gap-3 text-slate-500">
+                        <Calendar size={18} />
+                        <span className="text-xs font-bold uppercase tracking-widest">No Recent or Upcoming Driver Holidays</span>
+                    </div>
+                )}
+            </div>
+
             {/* --- HEADER --- */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
                 <div>
-                    <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400 flex items-center gap-3">
-                        <Truck className="text-blue-400" size={32} />
-                        Order Management
+                    <h1 className="text-3xl font-black text-white italic flex items-center gap-2">
+                        <div className="bg-gradient-to-r from-blue-600 to-cyan-500 w-3 h-10 rounded-full"></div>
+                        Delivery Order Management
+                        <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full font-mono border border-slate-700">v2.0</span>
                     </h1>
                     <p className="text-slate-400 mt-1 font-medium">Assign orders, track shipments, and manage fleet.</p>
                 </div>
@@ -710,7 +962,7 @@ const DeliveryOrderManagement: React.FC = () => {
             </div>
 
             {/* --- MAIN GRID --- */}
-            <Dnd.DragDropContext onDragEnd={onDragEnd}>
+            <DragDropContext onDragEnd={onDragEnd}>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                     {/* Add Unassigned Pseudo-Driver if not in list */}
                     {[
@@ -743,7 +995,19 @@ const DeliveryOrderManagement: React.FC = () => {
                                         <div>
                                             <div className={`font-bold text-sm ${isUnassigned ? 'text-slate-400' : 'text-white'}`}>{driver.name || 'Unknown'}</div>
                                             <div className="text-[10px] text-slate-500 font-mono flex items-center gap-2">
-                                                {!isUnassigned && <><Truck size={10} /> {driverOrders.length} Orders</>}
+                                                {!isUnassigned && (
+                                                    <>
+                                                        {lorries.find(l => l.driverUserId === driver.uid) ? (
+                                                            <span className="flex items-center gap-1 text-blue-400 font-black">
+                                                                <Truck size={10} /> {lorries.find(l => l.driverUserId === driver.uid)?.plateNumber}
+                                                                <span className="mx-1 opacity-30">|</span>
+                                                                <MapPin size={10} className="text-slate-600" /> {lorries.find(l => l.driverUserId === driver.uid)?.preferredZone}
+                                                            </span>
+                                                        ) : (
+                                                            <><Truck size={10} /> {driverOrders.length} Orders</>
+                                                        )}
+                                                    </>
+                                                )}
                                                 {isUnassigned && <><Box size={10} /> Pending Assign</>}
                                             </div>
                                         </div>
@@ -755,7 +1019,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                 </div>
 
                                 {/* Orders List (Droppable) */}
-                                <Dnd.Droppable droppableId={driver.uid}>
+                                <Droppable droppableId={driver.uid}>
                                     {(provided, snapshot) => (
                                         <div
                                             ref={provided.innerRef}
@@ -763,14 +1027,14 @@ const DeliveryOrderManagement: React.FC = () => {
                                             className={`flex-1 p-3 space-y-3 max-h-[600px] overflow-y-auto custom-scrollbar bg-[#09090b] ${snapshot.isDraggingOver ? 'bg-slate-900/50' : ''}`}
                                         >
                                             {driverOrders.map((order, index) => (
-                                                <Dnd.Draggable key={order.id} draggableId={order.id} index={index}>
+                                                <Draggable key={order.id} draggableId={order.id} index={index}>
                                                     {(provided, snapshot) => (
                                                         <div
                                                             ref={provided.innerRef}
                                                             {...provided.draggableProps}
                                                             {...provided.dragHandleProps}
                                                             onClick={() => {
-                                                                setEditingOrderId(order.id);
+                                                                setEditingOrderId(order.id); setNewOrderDate(order.orderDate || '');
                                                                 setSelectedDriverId(order.driverId || '');
                                                                 setOrderCustomer(order.customer);
                                                                 setNewOrderAddress(order.deliveryAddress || '');
@@ -797,15 +1061,45 @@ const DeliveryOrderManagement: React.FC = () => {
                                                                             {determineState(order.deliveryAddress)}
                                                                         </div>
                                                                     )}
+                                                                    {/* Delete Button */}
                                                                     <button
                                                                         onClick={(e) => {
                                                                             e.stopPropagation();
                                                                             handleDeleteOrder(order.id, order.orderNumber);
                                                                         }}
-                                                                        className="p-1 text-slate-600 hover:text-red-500 hover:bg-red-500/10 rounded-md transition-colors"
-                                                                        title="Delete Order"
+                                                                        className="p-1.5 text-red-400 bg-red-500/10 hover:bg-red-500/20 hover:text-red-300 rounded-md transition-colors"
+                                                                        title="Cancel Order"
                                                                     >
                                                                         <Trash2 size={14} />
+                                                                    </button>
+
+                                                                    {/* Reassign Button */}
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setReassignOrder(order);
+                                                                            setIsReassignModalOpen(true);
+                                                                        }}
+                                                                        className="p-1.5 text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 hover:text-blue-300 rounded-md transition-colors ml-1"
+                                                                        title="Change Driver"
+                                                                    >
+                                                                        <UserIcon size={14} />
+                                                                    </button>
+
+                                                                    {/* Split Button */}
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setSplitOrder(order);
+                                                                            setSplitItems({}); // Reset
+                                                                            setSplitTargetDriverId('');
+                                                                            setSplitTargetDate('');
+                                                                            setIsSplitModalOpen(true);
+                                                                        }}
+                                                                        className="p-1.5 text-orange-400 bg-orange-500/10 hover:bg-orange-500/20 hover:text-orange-300 rounded-md transition-colors ml-1"
+                                                                        title="Split Order / Partial Delivery"
+                                                                    >
+                                                                        <Scissors size={14} />
                                                                     </button>
                                                                 </div>
                                                                 <div className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider border ${order.status === 'New' ? 'text-amber-400 border-amber-500/20 bg-amber-500/10' :
@@ -817,9 +1111,18 @@ const DeliveryOrderManagement: React.FC = () => {
                                                                 </div>
                                                             </div>
 
-                                                            <div className="text-xs text-slate-500 flex items-center gap-2 mb-3 line-clamp-1">
-                                                                <Calendar size={12} className="text-slate-600" />
-                                                                <span className={!order.orderDate ? 'opacity-50' : ''}>{order.orderDate || 'No Date'}</span>
+                                                            <div className="text-xs text-slate-500 flex items-center gap-2 mb-3">
+                                                                <Calendar size={14} className="text-slate-600 shrink-0" />
+                                                                <div className="flex flex-col gap-0.5 leading-tight">
+                                                                    <div className="flex items-center gap-1">
+                                                                        <span className="text-[9px] font-black text-slate-600 uppercase tracking-tighter">📦 Ord:</span>
+                                                                        <span className="text-[10px] text-slate-500 font-bold">{formatDateDMY(order.orderDate)}</span>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-1">
+                                                                        <span className="text-[9px] font-black text-blue-500/50 uppercase tracking-tighter">🚚 Del:</span>
+                                                                        <span className="text-[10px] text-blue-400 font-black">{formatDateDMY(order.deadline) || "No Date"}</span>
+                                                                    </div>
+                                                                </div>
                                                             </div>
 
                                                             {/* Items Preview */}
@@ -860,12 +1163,12 @@ const DeliveryOrderManagement: React.FC = () => {
                                                             )}
                                                         </div>
                                                     )}
-                                                </Dnd.Draggable>
+                                                </Draggable>
                                             ))}
                                             {provided.placeholder}
                                         </div>
                                     )}
-                                </Dnd.Droppable>
+                                </Droppable>
                                 {driverOrders.length === 0 && (
                                     <div className="h-40 flex flex-col items-center justify-center text-slate-700 opacity-50">
                                         <Truck size={40} className="mb-3" />
@@ -876,7 +1179,7 @@ const DeliveryOrderManagement: React.FC = () => {
                         );
                     })}
                 </div>
-            </Dnd.DragDropContext>
+            </DragDropContext>
 
             {/* --- CREATE / EDIT MODAL --- */}
             {
@@ -920,13 +1223,44 @@ const DeliveryOrderManagement: React.FC = () => {
                                         </div>
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Delivery Date</label>
-                                        <input
-                                            type="date"
-                                            className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-300 focus:border-blue-500/50 outline-none"
-                                            value={newOrderDeliveryDate}
-                                            onChange={e => setNewOrderDeliveryDate(e.target.value)}
-                                        />
+<div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-[10px] font-black text-slate-600 uppercase mb-2 tracking-widest flex items-center gap-2">
+                                            <Calendar size={12} /> Order Date
+                                        </label>
+                                        <div className="relative group">
+                                            <input
+                                                type="date"
+                                                className="w-full bg-slate-900/50 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-400 focus:border-blue-500/30 outline-none appearance-none cursor-pointer [color-scheme:dark] transition-all"
+                                                value={newOrderDate}
+                                                onChange={e => setNewOrderDate(e.target.value)}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-black text-blue-500/80 uppercase mb-2 tracking-widest flex items-center gap-2">
+                                            <Calendar size={12} /> Delivery Date
+                                        </label>
+                                        <div className="relative group">
+                                            <input
+                                                type="date"
+                                                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-200 focus:border-blue-500/50 outline-none appearance-none cursor-pointer [color-scheme:dark] transition-all font-bold"
+                                                value={newOrderDeliveryDate}
+                                                onChange={e => setNewOrderDeliveryDate(e.target.value)}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="mt-1 flex justify-between px-1">
+                                    <div className="text-[9px] text-slate-700 font-bold uppercase">Ord: {formatDateDMY(newOrderDate) || "Today"}</div>
+                                    <div className="text-[9px] text-blue-500/60 font-black uppercase">Del: {formatDateDMY(newOrderDeliveryDate) || "Not Set"}</div>
+                                </div>
+                                        <div className="mt-1 text-[10px] text-slate-600 font-bold px-1 flex justify-between">
+                                            <span>Format: DD/MM/YYYY</span>
+                                            {newOrderDeliveryDate && (
+                                                <span className="text-blue-500/80">Selected: {formatDateDMY(newOrderDeliveryDate)}</span>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
 
@@ -1038,11 +1372,21 @@ const DeliveryOrderManagement: React.FC = () => {
                                                     onChange={(val) => {
                                                         const i = v2Items.find(x => x.sku === val);
                                                         setSelectedV2Item(i || null);
-                                                        if (i) setItemSearchTerm(i.name);
                                                     }}
                                                     minimal
                                                 />
                                                 <div className="flex gap-2">
+                                                    <select
+                                                        className="w-1/4 bg-slate-950 border border-slate-700 rounded-xl px-3 py-3 text-slate-300 outline-none focus:border-blue-500 text-xs font-bold uppercase transition-all"
+                                                        value={currentItemLoc}
+                                                        onChange={e => setCurrentItemLoc(e.target.value)}
+                                                    >
+                                                        <option value="SPD">SPD</option>
+                                                        <option value="OPM Lama">OPM Lama</option>
+                                                        <option value="OPM Corner">OPM Corner</option>
+                                                        <option value="Nilai">Nilai</option>
+                                                        <option value="">No Loc</option>
+                                                    </select>
                                                     <input
                                                         type="text"
                                                         placeholder="Item Remark..."
@@ -1086,6 +1430,153 @@ const DeliveryOrderManagement: React.FC = () => {
                 )
             }
 
+            {/* --- SPLIT ORDER MODAL --- */}
+            {isSplitModalOpen && splitOrder && (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+                    <div className="bg-[#09090b] w-full max-w-lg rounded-2xl border border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                        <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
+                            <h1 className="text-3xl font-black text-white italic flex items-center gap-2">
+                                <div className="bg-gradient-to-r from-blue-600 to-cyan-500 w-3 h-10 rounded-full"></div>
+                                Delivery Order Management
+                                <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full font-mono border border-slate-700">v2.0</span>
+                            </h1>
+                            <button onClick={() => setIsSplitModalOpen(false)} className="text-slate-500 hover:text-white">
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
+                            {/* Header Info */}
+                            <div className="mb-6 bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+                                <div className="flex justify-between items-start mb-2">
+                                    <div>
+                                        <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Original Order</div>
+                                        <div className="text-xl font-mono font-black text-white">{splitOrder.orderNumber}</div>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Customer</div>
+                                        <div className="text-sm font-bold text-slate-300">{splitOrder.customer}</div>
+                                    </div>
+                                </div>
+                                <div className="text-xs text-slate-400 italic">
+                                    Define quantities to move to the <b>New Order</b>. Remaining items will stay in this order.
+                                </div>
+                            </div>
+
+                            {/* Item Selection */}
+                            <div className="space-y-4 mb-6">
+                                <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">Items to Transfer</div>
+                                {splitOrder.items.map((item, idx) => (
+                                    <div key={idx} className="bg-slate-950 p-3 rounded-lg border border-slate-800 flex items-center gap-4">
+                                        <div className="flex-1">
+                                            <div className="text-sm font-bold text-slate-200">{item.product}</div>
+                                            <div className="text-[10px] text-slate-500">{item.sku}</div>
+                                            <div className="text-xs text-slate-400 mt-1">Total: <span className="text-white font-mono">{item.quantity}</span> {item.packaging || 'Unit'}</div>
+                                        </div>
+
+                                        <div className="flex flex-col items-end gap-1">
+                                            <label className="text-[10px] text-slate-500 font-bold uppercase">Transfer Qty</label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                max={item.quantity}
+                                                className="w-20 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-right text-white font-bold outline-none focus:border-orange-500"
+                                                value={splitItems[idx] || ''}
+                                                placeholder="0"
+                                                onChange={(e) => {
+                                                    const val = Math.min(Number(e.target.value), item.quantity);
+                                                    setSplitItems(prev => ({ ...prev, [idx]: val }));
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* New Order Settings */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Assign Driver (Optional)</label>
+                                    <select
+                                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-orange-500"
+                                        value={splitTargetDriverId}
+                                        onChange={e => setSplitTargetDriverId(e.target.value)}
+                                    >
+                                        <option value="">Unassigned</option>
+                                        {drivers.map(d => <option key={d.uid} value={d.uid}>{d.name}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">New Delivery Date (Optional)</label>
+                                    <input
+                                        type="date"
+                                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-orange-500"
+                                        value={splitTargetDate}
+                                        onChange={e => setSplitTargetDate(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="p-4 border-t border-slate-800 bg-slate-900/50 flex justify-end gap-3">
+                            <button onClick={() => setIsSplitModalOpen(false)} className="px-4 py-2 rounded-lg text-slate-400 hover:text-white text-xs font-bold transition-colors">Cancel</button>
+                            <button
+                                onClick={handleSplitOrder}
+                                className="px-6 py-2 bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-500 hover:to-orange-400 text-white rounded-lg text-xs font-bold shadow-lg shadow-orange-900/20 transition-all active:scale-95 flex items-center gap-2"
+                            >
+                                <Scissors size={14} />
+                                Confirm Split
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* --- REASSIGN DRIVER MODAL --- */}
+            {isReassignModalOpen && reassignOrder && (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+                    <div className="bg-[#09090b] w-full max-w-sm rounded-2xl border border-slate-800 shadow-2xl overflow-hidden">
+                        <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
+                            <h3 className="font-bold text-white flex items-center gap-2">
+                                <UserIcon size={18} className="text-blue-400" />
+                                Reassign Driver
+                            </h3>
+                            <button onClick={() => setIsReassignModalOpen(false)} className="text-slate-500 hover:text-white">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="p-4">
+                            <div className="mb-4 p-3 bg-slate-900 rounded-lg border border-slate-800">
+                                <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1">Order #</div>
+                                <div className="text-lg font-mono font-black text-white">{reassignOrder.orderNumber}</div>
+                                <div className="text-xs text-slate-400 mt-1">{reassignOrder.customer}</div>
+                            </div>
+
+                            <div className="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar">
+                                {drivers.map(driver => (
+                                    <button
+                                        key={driver.uid}
+                                        onClick={() => handleReassignDriver(driver.uid)}
+                                        className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all ${reassignOrder.driverId === driver.uid
+                                            ? 'bg-blue-500/20 border-blue-500 text-blue-100'
+                                            : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800 hover:border-slate-700'
+                                            }`}
+                                    >
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${reassignOrder.driverId === driver.uid ? 'bg-blue-500 text-white' : 'bg-slate-800 text-slate-400'
+                                            }`}>
+                                            {(driver.name || '?').charAt(0).toUpperCase()}
+                                        </div>
+                                        <div className="font-bold text-sm text-left flex-1">{driver.name}</div>
+                                        {reassignOrder.driverId === driver.uid && <div className="text-[10px] font-bold uppercase bg-blue-500 text-white px-2 py-0.5 rounded-full">Current</div>}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* --- QUICK STOCK OUT MODAL --- */}
             {
                 isStockOutOpen && (
@@ -1095,7 +1586,14 @@ const DeliveryOrderManagement: React.FC = () => {
                              Actually SimpleStock logic I added handles the button rendering if onClose is present.
                          */}
                             <div className="p-4">
-                                <SimpleStock onClose={() => setIsStockOutOpen(false)} isModal={true} />
+                                <SimpleStock
+                                    onClose={() => setIsStockOutOpen(false)}
+                                    isModal={true}
+                                    onSuccess={() => {
+                                        setIsStockOutOpen(false);
+                                        fetchData(); // Soft Refresh
+                                    }}
+                                />
                             </div>
                         </div>
                     </div>

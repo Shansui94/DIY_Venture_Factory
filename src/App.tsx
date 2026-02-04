@@ -16,6 +16,10 @@ import ProductLibrary from './pages/ProductLibrary';
 import DeliveryOrderManagement from './pages/DeliveryOrderManagement';
 import DriverDelivery from './pages/DriverDelivery';
 import DriverHistory from './pages/DriverHistory';
+import DriverLeave from './pages/DriverLeave';
+import LorryService from './pages/LorryService';
+import MaintenanceManagement from './pages/MaintenanceManagement';
+import LorryManagement from './pages/LorryManagement';
 import Dispatch from './pages/Dispatch';
 import LoadingDock from './pages/LoadingDock';
 import MachineLabels from './pages/MachineLabels';
@@ -30,6 +34,8 @@ import UniversalIntake from './pages/UniversalIntake';
 import FactoryDashboard from './pages/FactoryDashboard';
 import SimpleStock from './pages/SimpleStock';
 import UserManagement from './pages/UserManagement';
+import HRPortal from './pages/HRPortal';
+import IoTManagement from './pages/IoTManagement';
 
 import { User, UserRole, InventoryItem, ProductionLog as ProductionLogType, JobOrder } from './types';
 import AIAgentWidget from './components/AIAgentWidget';
@@ -132,9 +138,9 @@ function App() {
         // Define allowable pages per role
         const allowedPages: Record<string, string[]> = {
             'SuperAdmin': ['*'], // The Only One with Full Access
-            'Admin': ['profile', 'construction', 'factory-dashboard', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'dispatch', 'loading-dock', 'production', 'report-history', 'users', 'hr', 'claims', 'simple-stock'],
-            'Manager': ['profile', 'construction', 'factory-dashboard', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'dispatch', 'loading-dock', 'production', 'report-history', 'hr', 'claims', 'simple-stock'],
-            'Driver': ['delivery-driver', 'delivery-history', 'claims', 'profile'],
+            'Admin': ['profile', 'construction', 'factory-dashboard', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'dispatch', 'loading-dock', 'production', 'report-history', 'users', 'hr', 'claims', 'simple-stock', 'maintenance', 'lorry-management', 'iot'],
+            'Manager': ['profile', 'construction', 'factory-dashboard', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'dispatch', 'loading-dock', 'production', 'report-history', 'hr', 'claims', 'simple-stock', 'maintenance', 'lorry-management', 'iot'],
+            'Driver': ['delivery-driver', 'delivery-history', 'driver-leave', 'lorry-service', 'claims', 'profile'],
             'Operator': ['scanner', 'profile'],
             'Device': ['scanner'],
             'HR': ['profile', 'construction'],
@@ -493,7 +499,6 @@ function App() {
     const handleCreateJob = async (newJobData: Partial<JobOrder>) => {
         // DB expects UUID for job_id
         const uuid = self.crypto.randomUUID();
-        const friendlyId = `JOB-${Date.now().toString().slice(-4)}`;
 
         // Determine Zone automatically if location/address is provided
         const address = newJobData.deliveryAddress || (newJobData as any).location || '';
@@ -588,6 +593,8 @@ function App() {
                 return null; // <ProductionPlanning jobs={jobs} onUpdateJob={handleUpdateJob} />;
             case 'production':
                 return <ProductionLog logs={logs} userRole={user?.role || 'Operator'} />;
+            case 'iot':
+                return <IoTManagement />;
             case 'inventory':
                 return <Inventory inventory={inventory} />;
             case 'livestock':
@@ -602,6 +609,14 @@ function App() {
                 return <DriverDelivery user={user} />;
             case 'delivery-history':
                 return <DriverHistory user={user} />;
+            case 'driver-leave':
+                return <DriverLeave user={user} />;
+            case 'lorry-service':
+                return <LorryService user={user} />;
+            case 'maintenance':
+                return <MaintenanceManagement />;
+            case 'lorry-management':
+                return <LorryManagement />;
             case 'dispatch':
                 return <Dispatch />;
             case 'loading-dock':
@@ -620,7 +635,7 @@ function App() {
             case 'users':
                 return <UserManagement currentUser={user} />;
             case 'hr':
-                return <UnderConstruction title="HR Portal" />;
+                return <HRPortal />;
             case 'simple-stock': // Added
                 return <SimpleStock />;
             case 'claims':

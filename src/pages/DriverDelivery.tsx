@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
-import { Truck, CheckCircle, Package, LogOut, ChevronRight, X } from 'lucide-react';
+import { Truck, CheckCircle, Package, ChevronRight, X, RefreshCw } from 'lucide-react';
 import { SalesOrder } from '../types';
 
 interface DriverDeliveryProps {
@@ -156,7 +156,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onLogout }) => {
                     }
                     return t;
                 }));
-                alert("✅ Stock Deducted & Loaded!");
+                // alert("✅ Stock Deducted & Loaded!");
             }
 
             setIsLoadModalOpen(false);
@@ -169,6 +169,29 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onLogout }) => {
         }
     };
 
+    // Real-time Subscription
+    useEffect(() => {
+        if (!user?.uid) return;
+
+        console.log("Subscribing to driver orders:", user.uid);
+        const subscription = supabase
+            .channel(`driver-orders-${user.uid}`)
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'sales_orders',
+                filter: `driver_id=eq.${user.uid}`
+            }, (payload) => {
+                console.log("Realtime Update Recieved!", payload);
+                fetchTasks();
+            })
+            .subscribe();
+
+        return () => {
+            subscription.unsubscribe();
+        };
+    }, [user]);
+
     // View Logic
     const todoList = tasks.filter(t => t.status !== 'Delivered' && t.status !== 'Cancelled');
     const doneList = tasks.filter(t => t.status === 'Delivered');
@@ -176,17 +199,15 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onLogout }) => {
 
     return (
         <div className="min-h-screen bg-black text-slate-200 pb-20 font-sans">
-            {/* TOP BAR */}
-            <div className="sticky top-0 z-30 bg-black/90 backdrop-blur-md border-b border-white/10 p-4 flex justify-between items-center">
-                <div>
-                    <img src="/packsecure-logo.jpg" alt="PackSecure" className="h-8 mb-1" />
-                    <p className="text-[10px] font-bold text-slate-500 uppercase">{user?.name || 'Unknown Driver'} • {tasks.length} Orders</p>
-                </div>
-                {onLogout && (
-                    <button onClick={onLogout} className="p-2 bg-slate-900 rounded-full text-slate-400">
-                        <LogOut size={16} />
-                    </button>
-                )}
+            <div className="p-4 flex items-center justify-between border-b border-white/5 bg-slate-900/50">
+                <p className="text-[10px] font-bold text-slate-500 uppercase">{user?.name || 'Unknown Driver'} • {tasks.length} Orders</p>
+                <button
+                    onClick={() => fetchTasks()}
+                    disabled={loading}
+                    className="p-1.5 bg-slate-800 rounded-lg text-blue-400 border border-slate-700 active:scale-95 transition-all"
+                >
+                    <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+                </button>
             </div>
 
             {/* TABS */}
@@ -238,20 +259,45 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onLogout }) => {
                                 </div>
                             )}
 
-                            {/* Items Summary with Remarks */}
-                            <div className="space-y-2 mb-6">
-                                {order.items?.map((item, idx) => (
-                                    <div key={idx} className="flex justify-between items-center text-sm border-b border-slate-800 pb-2 last:border-0 last:pb-0">
-                                        <div>
-                                            <span className="font-bold text-white">{item.quantity} x {item.sku}</span>
-                                            {item.remark && (
-                                                <div className="text-[11px] text-amber-500 font-mono mt-0.5">
-                                                    {item.remark}
-                                                </div>
-                                            )}
+                            {/* Items Summary with Remarks (Grouped by Location) */}
+                            <div className="space-y-3 mb-6">
+                                {(() => {
+                                    const grouped = (order.items || []).reduce((acc: any, item: any) => {
+                                        let loc = 'Other Items';
+                                        if (item.remark && item.remark.includes('Loc:')) {
+                                            const match = item.remark.match(/Loc:\s*([^)\n\r,]+)/);
+                                            if (match) loc = match[1].trim();
+                                            // Handle legacy "General" tag
+                                            if (loc.toLowerCase() === 'general') loc = 'Other Items';
+                                        }
+                                        if (!acc[loc]) acc[loc] = [];
+                                        acc[loc].push(item);
+                                        return acc;
+                                    }, {});
+
+                                    return Object.entries(grouped).map(([loc, items]: [string, any]) => (
+                                        <div key={loc} className="bg-slate-950/50 p-3 rounded-xl border border-slate-800">
+                                            <div className="text-[10px] font-bold text-slate-500 uppercase mb-2 flex items-center gap-1">
+                                                <Package size={10} /> {loc}
+                                            </div>
+                                            <div className="space-y-2">
+                                                {items.map((item: any, idx: number) => (
+                                                    <div key={idx} className="flex justify-between items-center text-sm border-b border-slate-800/50 last:border-0 pb-1 last:pb-0">
+                                                        <div>
+                                                            <span className="font-bold text-white">{item.quantity} x {item.sku}</span>
+                                                            {/* Strip Loc from remark for cleaner display */}
+                                                            {item.remark && !item.remark.includes('Loc:') && (
+                                                                <div className="text-[11px] text-amber-500 font-mono mt-0.5">
+                                                                    {item.remark}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    ));
+                                })()}
                             </div>
 
 
@@ -296,11 +342,13 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onLogout }) => {
                             {(() => {
                                 const grouped: Record<string, any[]> = {};
                                 loadItems.forEach(item => {
-                                    // Extract Location from Remark "Loc: X"
-                                    let loc = 'Unknown Location';
-                                    if (item.remark && item.remark.startsWith('Loc:')) {
-                                        loc = item.remark.replace('Loc:', '').trim();
-                                    }
+                                    let loc = 'Other Items';
+                                    const match = item.remark?.match(/Loc:\s*([^)\n\r,]+)/);
+                                    if (match) loc = match[1].trim();
+
+                                    // Handle legacy "General" tag
+                                    if (loc.toLowerCase() === 'general') loc = 'Other Items';
+
                                     if (!grouped[loc]) grouped[loc] = [];
                                     grouped[loc].push(item);
                                 });
