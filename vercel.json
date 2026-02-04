@@ -17,6 +17,14 @@
             "destination": "/api/agent/debug-models"
         },
         {
+            "source": "/api/iot-config",
+            "destination": "/api/iot-config"
+        },
+        {
+            "source": "/iot-config",
+            "destination": "/api/iot-config"
+        },
+        {
             "source": "/(.*)",
             "destination": "/index.html"
         }
@@ -36,6 +44,10 @@
         },
         "api/agent/debug-models.ts": {
             "maxDuration": 60,
+            "memory": 1024
+        },
+        "api/iot-config.ts": {
+            "maxDuration": 10,
             "memory": 1024
         }
     }
