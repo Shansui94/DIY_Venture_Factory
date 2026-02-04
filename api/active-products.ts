@@ -13,7 +13,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Debug Ping
     if (req.query.ping) {
-        return res.status(200).json({ status: 'pong', env: process.env.VITE_SUPABASE_URL ? 'set' : 'unset' });
+        return res.status(200).json({ status: 'pong' });
     }
 
     const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://kdahubyhwndgyloaljak.supabase.co";

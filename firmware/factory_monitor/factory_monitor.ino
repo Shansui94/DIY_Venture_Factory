@@ -14,16 +14,17 @@
 const char *ssid = "ESBL_2.4GHz";
 const char *password = "88888888";
 
-// --- NEW: VERCEL DYNAMIC CONFIG ---
-const String configApiUrl = "https://packsecure-os.vercel.app/api/iot?mac=";
+// 2. Vercel API (Dynamic Config)
+const String configApiUrl =
+    "https://packsecure-os.vercel.app/api/active-products?mac=";
 
 // --- SERVER CONFIGURATION ---
 const char *supabaseUrl =
     "https://kdahubyhwndgyloaljak.supabase.co/rest/v1/production_logs";
 const char *apiKey =
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
-    "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtkYWh1Ynlod25kZ3lsb2FsamakIiwicm9sZSI6Im"
-    "Fub24iLCJpYXQiOjE3NjUzODY4ODksLCJleHAiOjIwODA5NjI4ODl9."
+    "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtkYWh1Ynlod25kZ3lsb2FsamFrIiwicm9sZSI6Im"
+    "Fub24iLCJpYXQiOjE3NjUzODY4ODksImV4cCI6MjA4MDk2Mjg4OX0."
     "mzTtQ6zpfvRY07372UH_"
     "M4dvKPzHBDkiydwosUYPs-8";
 
