@@ -1,6 +1,10 @@
 {
     "rewrites": [
         {
+            "source": "/api/iot-config",
+            "destination": "/api/iot_setup"
+        },
+        {
             "source": "/api/(.*)",
             "destination": "/api/$1"
         },
@@ -26,7 +30,7 @@
             "maxDuration": 60,
             "memory": 1024
         },
-        "api/iot-config.ts": {
+        "api/iot_setup.ts": {
             "maxDuration": 10,
             "memory": 1024
         }
