@@ -29,6 +29,10 @@
         "api/agent/debug-models.ts": {
             "maxDuration": 60,
             "memory": 1024
+        },
+        "api/iot-data.ts": {
+            "maxDuration": 10,
+            "memory": 1024
         }
     }
 }
