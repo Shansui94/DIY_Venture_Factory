@@ -1,28 +1,8 @@
 {
     "rewrites": [
         {
-            "source": "/api/agent/chat",
-            "destination": "/api/agent/chat"
-        },
-        {
-            "source": "/api/agent/vision",
-            "destination": "/api/agent/vision"
-        },
-        {
-            "source": "/api/agent/parse-text",
-            "destination": "/api/agent/parse-text"
-        },
-        {
-            "source": "/api/agent/debug-models",
-            "destination": "/api/agent/debug-models"
-        },
-        {
-            "source": "/api/iot-config",
-            "destination": "/api/iot-config"
-        },
-        {
-            "source": "/iot-config",
-            "destination": "/api/iot-config"
+            "source": "/api/(.*)",
+            "destination": "/api/$1"
         },
         {
             "source": "/(.*)",
