@@ -151,9 +151,13 @@ function App() {
 
         let allowed = allowedPages[role] || [];
 
-        // --- SPECIAL USER OVERRIDE (User 009) ---
         if (user.employeeId === '009') {
             allowed = ['order-summary', 'maintenance', 'profile'];
+        }
+
+        // --- SPECIAL USER OVERRIDE (Vivian) ---
+        if (user.email === 'diyadmin1111@gmail.com') {
+            allowed = [...allowed, 'order-summary'];
         }
 
         const isAllowed = allowed.includes('*') || allowed.includes(activePage);

@@ -155,7 +155,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                             <NavGroup title="Vivian Workspace">
                                 <NavItem id="livestock" icon={BarChart3} label="Live Stock" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 <NavItem id="delivery" icon={Truck} label="Delivery Orders" roles={['SuperAdmin', 'Admin', 'Manager']} />
-                                <NavItem id="order-summary" icon={FileBarChart} label="Order Summary" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                <NavItem id="order-summary" icon={FileBarChart} label="Daily Prep" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 <NavItem id="maintenance" icon={Wrench} label="Maintenance Control" roles={['SuperAdmin', 'Admin', 'Manager']} />
                             </NavGroup>
                         )}
