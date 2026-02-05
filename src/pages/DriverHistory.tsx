@@ -39,7 +39,8 @@ const DriverHistory: React.FC<DriverHistoryProps> = ({ user }) => {
                 const mapped = data.map((item: any) => ({
                     ...item,
                     orderNumber: item.order_number || item.orderNumber,
-                    deliveryAddress: item.delivery_address || item.deliveryAddress
+                    deliveryAddress: item.delivery_address || item.deliveryAddress,
+                    deliveryDate: item.deadline
                 }));
                 setTasks(mapped);
             }
@@ -70,7 +71,7 @@ const DriverHistory: React.FC<DriverHistoryProps> = ({ user }) => {
                         <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
                         <input
                             type="date"
-                            className="w-full bg-slate-800 border border-slate-700 rounded-xl py-3 pl-10 pr-4 text-white text-sm font-bold uppercase tracking-wider focus:outline-none focus:border-blue-500"
+                            className="w-full bg-slate-800 border border-slate-700 rounded-xl py-3 pl-10 pr-4 text-white text-sm font-bold uppercase tracking-wider focus:outline-none focus:border-blue-500 [color-scheme:dark]"
                             value={selectedDate}
                             onChange={(e) => setSelectedDate(e.target.value)}
                         />
@@ -113,7 +114,7 @@ const DriverHistory: React.FC<DriverHistoryProps> = ({ user }) => {
 
                             <div className="flex items-center gap-2 text-xs text-slate-400 font-mono mt-3 pt-3 border-t border-slate-800">
                                 <Calendar size={12} />
-                                {order.pod_timestamp ? new Date(order.pod_timestamp).toLocaleString() : order.orderDate}
+                                {order.pod_timestamp ? new Date(order.pod_timestamp).toLocaleString() : (order as any).deliveryDate}
                             </div>
                         </div>
                     ))

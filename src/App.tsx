@@ -29,6 +29,7 @@ import ReportHistory from './pages/ReportHistory';
 import UnderConstruction from './pages/UnderConstruction';
 import ClaimsManagement from './pages/ClaimsManagement';
 import UpdatePassword from './pages/UpdatePassword';
+import OrderSummary from './pages/OrderSummary'; // New Page
 import CustomerImport from './pages/CustomerImport'; // Added Import Page
 import UniversalIntake from './pages/UniversalIntake';
 import FactoryDashboard from './pages/FactoryDashboard';
@@ -138,8 +139,8 @@ function App() {
         // Define allowable pages per role
         const allowedPages: Record<string, string[]> = {
             'SuperAdmin': ['*'], // The Only One with Full Access
-            'Admin': ['profile', 'construction', 'factory-dashboard', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'dispatch', 'loading-dock', 'production', 'report-history', 'users', 'hr', 'claims', 'simple-stock', 'maintenance', 'lorry-management', 'iot'],
-            'Manager': ['profile', 'construction', 'factory-dashboard', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'dispatch', 'loading-dock', 'production', 'report-history', 'hr', 'claims', 'simple-stock', 'maintenance', 'lorry-management', 'iot'],
+            'Admin': ['profile', 'construction', 'factory-dashboard', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'loading-dock', 'production', 'report-history', 'users', 'hr', 'claims', 'simple-stock', 'maintenance', 'lorry-management', 'iot'],
+            'Manager': ['profile', 'construction', 'factory-dashboard', 'dashboard', 'data-v2', 'customer-import', 'universal-intake', 'scanner', 'jobs', 'livestock', 'inventory', 'recipes', 'products', 'delivery', 'order-summary', 'dispatch', 'loading-dock', 'production', 'report-history', 'hr', 'claims', 'simple-stock', 'maintenance', 'lorry-management', 'iot'],
             'Driver': ['delivery-driver', 'delivery-history', 'driver-leave', 'lorry-service', 'claims', 'profile'],
             'Operator': ['scanner', 'profile'],
             'Device': ['scanner'],
@@ -148,14 +149,21 @@ function App() {
             'Finance': ['profile', 'construction']
         };
 
-        const allowed = allowedPages[role] || [];
+        let allowed = allowedPages[role] || [];
+
+        // --- SPECIAL USER OVERRIDE (User 009) ---
+        if (user.employeeId === '009') {
+            allowed = ['order-summary', 'maintenance', 'profile'];
+        }
+
         const isAllowed = allowed.includes('*') || allowed.includes(activePage);
 
         if (!isAllowed) {
             console.warn(`Access Denied: ${role} tried to access ${activePage}. Redirecting...`);
             if (activePage === 'login') return; // Allow login page
 
-            if (allowed.includes('construction')) setActivePage('construction');
+            if (user.employeeId === '009') setActivePage('order-summary'); // Special redirect
+            else if (allowed.includes('construction')) setActivePage('construction');
             else if (role === 'Operator' || role === 'Device') setActivePage('scanner');
             else if (role === 'Driver') setActivePage('delivery-driver');
             else setActivePage('login');
@@ -238,7 +246,8 @@ function App() {
 
             // Initial Routing Logic (Force correct landing page)
             if (!localStorage.getItem('lastActivePage')) {
-                if (role === 'SuperAdmin') setActivePage('dashboard');
+                if (employeeId === '009') setActivePage('order-summary');
+                else if (role === 'SuperAdmin') setActivePage('dashboard');
                 else if (role === 'Operator' || role === 'Device') setActivePage('scanner');
                 else if (role === 'Driver') setActivePage('delivery-driver');
                 else if (['Admin', 'Manager', 'HR', 'Sales', 'Finance'].includes(role)) setActivePage('construction');
@@ -605,6 +614,8 @@ function App() {
                 return <ProductLibrary />;
             case 'delivery':
                 return <DeliveryOrderManagement />;
+            case 'order-summary':
+                return <OrderSummary user={user} />;
             case 'delivery-driver':
                 return <DriverDelivery user={user} />;
             case 'delivery-history':
@@ -676,9 +687,7 @@ function App() {
             <Layout activePage={activePage} setActivePage={setActivePage} userRole={user?.role} user={user} onLogout={handleLogout}>
                 {renderContent()}
                 <AIAgentWidget />
-                <div className="fixed bottom-0 left-0 bg-red-600 text-white font-mono text-[10px] px-2 py-0.5 z-[9999] pointer-events-none">
-                    DEPLOY CHECK: v6.7 {new Date().toLocaleTimeString()}
-                </div>
+
             </Layout >
         </ErrorBoundary>
     );

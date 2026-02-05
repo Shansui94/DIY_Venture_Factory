@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
-import { Wrench, CheckCircle, Calendar, Truck, User } from 'lucide-react';
+import { Wrench, Calendar, Truck, User } from 'lucide-react';
 
 const MaintenanceManagement: React.FC = () => {
     const [requests, setRequests] = useState<any[]>([]);
@@ -14,49 +14,155 @@ const MaintenanceManagement: React.FC = () => {
 
     const fetchRequests = async () => {
         setLoading(true);
-        const { data } = await supabase
-            .from('lorry_service_requests')
-            .select(`
-                *,
-                users_public (name, email)
-            `)
-            .order('created_at', { ascending: false });
 
-        if (data) setRequests(data);
-        setLoading(false);
+        try {
+            // Attempt 1: Try Join Fetch (Preferred)
+            const { data, error } = await supabase
+                .from('lorry_service_requests')
+                .select(`
+                    *,
+                    users_public (name, email)
+                `)
+                .order('created_at', { ascending: false });
+
+            if (!error && data) {
+                setRequests(data);
+                setLoading(false);
+                return;
+            }
+
+            if (error) {
+                console.warn("Join fetch failed, trying fallback...", error);
+            }
+
+            // Attempt 2: Fallback (Fetch Requests -> Then Fetch Users)
+            // 1. Fetch Requests
+            const { data: rawRequests, error: rawError } = await supabase
+                .from('lorry_service_requests')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (rawError) throw rawError;
+
+            if (rawRequests && rawRequests.length > 0) {
+                // 2. Extract Driver IDs
+                const driverIds = [...new Set(rawRequests.map(r => r.driver_id).filter(Boolean))];
+
+                // 3. Fetch Users
+                const { data: users } = await supabase
+                    .from('users_public')
+                    .select('id, name, email')
+                    .in('id', driverIds);
+
+                // 4. Manual Join
+                const joinedData = rawRequests.map(r => {
+                    const user = users?.find(u => u.id === r.driver_id);
+                    return {
+                        ...r,
+                        users_public: user ? { name: user.name, email: user.email } : null
+                    };
+                });
+
+                setRequests(joinedData);
+            } else {
+                setRequests([]);
+            }
+
+        } catch (err: any) {
+            console.error("Critical Fetch Error:", err);
+            alert("Fetch Failed: " + err.message);
+        } finally {
+            setLoading(false);
+        }
     };
 
-    const handleSchedule = async (id: string) => {
-        const date = window.prompt("Enter Scheduled Date (YYYY-MM-DD):");
-        if (!date) return;
+    // --- REALTIME UPDATE FIX ---
+    useEffect(() => {
+        const channel = supabase
+            .channel('lorry-requests-channel')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'lorry_service_requests' },
+                () => {
+                    console.log("New Service Request Detected! Refreshing...");
+                    fetchRequests();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, []);
+
+    // --- MODAL STATE ---
+    const [scheduleModal, setScheduleModal] = useState<{ open: boolean; requestId: string | null; date: string }>({
+        open: false,
+        requestId: null,
+        date: new Date().toISOString().split('T')[0] // Default to today
+    });
+
+    const openScheduleModal = (id: string) => {
+        setScheduleModal({ open: true, requestId: id, date: new Date().toISOString().split('T')[0] });
+    };
+
+    const confirmSchedule = async () => {
+        if (!scheduleModal.requestId || !scheduleModal.date) return;
 
         const { error } = await supabase
             .from('lorry_service_requests')
-            .update({ status: 'Scheduled', scheduled_date: date })
-            .eq('id', id);
+            .update({ status: 'Scheduled', scheduled_date: scheduleModal.date })
+            .eq('id', scheduleModal.requestId);
 
-        if (error) alert(error.message);
-        else fetchRequests();
+        if (error) {
+            alert("Error: " + error.message);
+        } else {
+            setScheduleModal({ ...scheduleModal, open: false });
+            fetchRequests(); // Refresh
+        }
     };
 
-    const handleDone = async (id: string) => {
-        if (!window.confirm("Mark as Maintenance Completed?")) return;
+    // Auto-Archive Past Requests
+    useEffect(() => {
+        const autoArchive = async () => {
+            const today = new Date().toISOString().split('T')[0];
 
-        const { error } = await supabase
-            .from('lorry_service_requests')
-            .update({ status: 'Completed', completed_at: new Date().toISOString() })
-            .eq('id', id);
+            // 1. Find expired requests
+            const { data: expired } = await supabase
+                .from('lorry_service_requests')
+                .select('id')
+                .eq('status', 'Scheduled')
+                .lt('scheduled_date', today);
 
-        if (error) alert(error.message);
-        else fetchRequests();
-    };
+            if (expired && expired.length > 0) {
+                console.log(`Auto-Archiving ${expired.length} past requests...`);
+
+                // 2. Mark them as completed
+                const { error } = await supabase
+                    .from('lorry_service_requests')
+                    .update({
+                        status: 'Completed',
+                        completed_at: new Date().toISOString()
+                    })
+                    .in('id', expired.map(e => e.id));
+
+                if (!error) {
+                    fetchRequests(); // Refresh list if updates happened
+                }
+            }
+        };
+
+        autoArchive();
+    }, []);
+
+
 
     const pendingList = requests.filter(r => r.status !== 'Completed');
     const historyList = requests.filter(r => r.status === 'Completed');
     const displayList = activeTab === 'pending' ? pendingList : historyList;
 
     return (
-        <div className="p-8 bg-[#121215] min-h-screen text-slate-100">
+        <div className="p-8 bg-[#121215] min-h-screen text-slate-100 relative">
             <header className="mb-8">
                 <h1 className="text-3xl font-black text-white italic flex items-center gap-3">
                     <Wrench className="text-amber-500" />
@@ -127,33 +233,52 @@ const MaintenanceManagement: React.FC = () => {
                             </div>
 
                             <div className="flex gap-2 w-full md:w-auto">
-                                {activeTab === 'pending' && (
-                                    <>
-                                        <button
-                                            onClick={() => handleSchedule(req.id)}
-                                            className="flex-1 md:w-auto px-4 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold uppercase transition-all flex items-center justify-center gap-2"
-                                        >
-                                            <Calendar size={14} /> Schedule
-                                        </button>
-                                        <button
-                                            onClick={() => handleDone(req.id)}
-                                            className="flex-1 md:w-auto px-6 py-3 bg-green-600 hover:bg-green-500 text-white rounded-xl text-xs font-bold uppercase transition-all flex items-center justify-center gap-2"
-                                        >
-                                            <CheckCircle size={14} /> Done
-                                        </button>
-                                    </>
-                                )}
-                                {activeTab === 'history' && (
-                                    <div className="text-xs font-bold text-slate-500 italic">
-                                        Completed on {new Date(req.completed_at).toLocaleDateString()}
-                                    </div>
-                                )}
+                                <button
+                                    onClick={() => openScheduleModal(req.id)}
+                                    className="w-full md:w-auto px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold uppercase transition-all flex items-center justify-center gap-2"
+                                >
+                                    <Calendar size={14} /> Schedule
+                                </button>
                             </div>
                         </div>
                     ))
                 )}
             </div>
-        </div>
+
+            {/* SCHEDULE MODAL */}
+            {
+                scheduleModal.open && (
+                    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+                        <div className="bg-slate-900 border border-slate-700 rounded-3xl p-8 max-w-sm w-full shadow-2xl">
+                            <h3 className="text-xl font-black text-white italic mb-4">Set Schedule Date</h3>
+                            <p className="text-slate-400 text-sm mb-6">Select when this lorry will be serviced.</p>
+
+                            <input
+                                type="date"
+                                value={scheduleModal.date}
+                                onChange={(e) => setScheduleModal({ ...scheduleModal, date: e.target.value })}
+                                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white mb-6 focus:outline-none focus:border-amber-500 transition-colors [color-scheme:dark]"
+                            />
+
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setScheduleModal({ ...scheduleModal, open: false })}
+                                    className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold uppercase text-xs text-slate-300"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={confirmSchedule}
+                                    className="flex-1 py-3 bg-amber-600 hover:bg-amber-500 rounded-xl font-bold uppercase text-xs text-white"
+                                >
+                                    Confirm
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
+        </div >
     );
 };
 

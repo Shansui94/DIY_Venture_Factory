@@ -5,10 +5,9 @@ import { SalesOrder } from '../types';
 
 interface DriverDeliveryProps {
     user: any;
-    onLogout?: () => void;
 }
 
-const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onLogout }) => {
+const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
     // State
     const [tasks, setTasks] = useState<SalesOrder[]>([]);
     const [loading, setLoading] = useState(true);
@@ -32,7 +31,7 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onLogout }) => {
                 .select('*')
                 .eq('driver_id', user.uid)
                 .neq('status', 'Cancelled')
-                .order('order_date', { ascending: false });
+                .order('deadline', { ascending: false });
 
             if (data) {
                 // Map DB snake_case to TS camelCase
@@ -40,7 +39,9 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onLogout }) => {
                     ...item,
                     orderNumber: item.order_number || item.orderNumber,
                     deliveryAddress: item.delivery_address || item.deliveryAddress,
-                    zone: item.zone || item.delivery_zone
+                    zone: item.zone || item.delivery_zone,
+                    deliveryDate: item.deadline, // Use Deadline as Delivery Date
+                    orderDate: item.order_date || item.orderDate // Map date
                 }));
 
                 // Client-side sort
@@ -193,8 +194,8 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onLogout }) => {
     }, [user]);
 
     // View Logic
-    const todoList = tasks.filter(t => t.status !== 'Delivered' && t.status !== 'Cancelled');
-    const doneList = tasks.filter(t => t.status === 'Delivered');
+    const todoList = tasks.filter(t => t.status !== 'Delivered' && t.status !== 'Pending Approval' && t.status !== 'Cancelled');
+    const doneList = tasks.filter(t => t.status === 'Delivered' || t.status === 'Pending Approval');
     const displayList = activeTab === 'todo' ? todoList : doneList;
 
     return (
@@ -241,13 +242,28 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onLogout }) => {
                     displayList.map((order) => (
                         <div key={order.id} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg relative">
                             {/* Status Strip */}
-                            <div className={`absolute left - 0 top - 0 bottom - 0 w - 1.5 ${order.status === 'Delivered' ? 'bg-green-500' : 'bg-blue-500'} `} />
+                            <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${order.status === 'Delivered' ? 'bg-green-500' :
+                                order.status === 'Pending Approval' ? 'bg-yellow-500' :
+                                    'bg-blue-500'
+                                }`} />
 
                             {/* Card Body */}
                             <div className="p-5 pl-7">
                                 <div className="flex justify-between items-start mb-6">
                                     {/* Swapped: State is now main title, Customer is subtitle */}
-                                    <h2 className="text-lg font-black text-white line-clamp-1">{order.deliveryAddress || 'No State'}</h2>
+                                    <div>
+                                        <h2 className="text-lg font-black text-white line-clamp-1">{order.deliveryAddress || 'No State'}</h2>
+                                        {(order as any).deliveryDate && (
+                                            <div className="flex items-center gap-2 mt-1 text-xs font-bold uppercase tracking-wider">
+                                                <span className="text-orange-500">
+                                                    {['Ahad', 'Isnin', 'Selasa', 'Rabu', 'Khamis', 'Jumaat', 'Sabtu'][new Date((order as any).deliveryDate).getDay()]}
+                                                </span>
+                                                <span className="text-blue-400">
+                                                    {new Date((order as any).deliveryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 
@@ -313,8 +329,19 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user, onLogout }) => {
                             )}
 
                             {activeTab === 'done' && (
-                                <div className="bg-green-500/10 border border-green-500/20 text-green-400 text-center py-2 rounded-xl text-xs font-bold uppercase flex items-center justify-center gap-2">
-                                    <CheckCircle size={14} /> Stock Deducted
+                                <div className={`text-center py-2 rounded-xl text-xs font-bold uppercase flex items-center justify-center gap-2 ${order.status === 'Pending Approval'
+                                    ? 'bg-yellow-500/10 border border-yellow-500/20 text-yellow-500'
+                                    : 'bg-green-500/10 border border-green-500/20 text-green-400'
+                                    }`}>
+                                    {order.status === 'Pending Approval' ? (
+                                        <>
+                                            <Truck size={14} /> Sent to Vivian
+                                        </>
+                                    ) : (
+                                        <>
+                                            <CheckCircle size={14} /> Stock Deducted
+                                        </>
+                                    )}
                                 </div>
                             )}
                         </div>

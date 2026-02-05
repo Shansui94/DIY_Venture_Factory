@@ -5,7 +5,7 @@ import { getV2Items } from '../services/apiV2';
 import { determineZone, determineState, findBestFactory } from '../utils/logistics';
 import {
     Plus, Search, Calendar, FileText, X, Truck,
-    User as UserIcon, Box, Zap, Trash2, Scissors, AlertTriangle, MapPin
+    User as UserIcon, Box, Zap, Trash2, Scissors, AlertTriangle, MapPin, Wrench
 } from 'lucide-react';
 import {
     SalesOrder,
@@ -141,11 +141,14 @@ const DeliveryOrderManagement: React.FC = () => {
     const [orders, setOrders] = useState<SalesOrder[]>([]);
     const [drivers, setDrivers] = useState<User[]>([]);
     const [lorries, setLorries] = useState<Lorry[]>([]);
+    const [lorryServices, setLorryServices] = useState<any[]>([]); // State for Service Reminders
 
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isStockOutOpen, setIsStockOutOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('All');
+
+
 
     // AI / Smart Import State
     // const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -155,6 +158,7 @@ const DeliveryOrderManagement: React.FC = () => {
 
     // New Order Form State
     const [selectedDriverId, setSelectedDriverId] = useState('');
+    const [newOrderDate, setNewOrderDate] = useState(''); // Order Date State
     const [newOrderDeliveryDate, setNewOrderDeliveryDate] = useState('');
     const [newOrderItems, setNewOrderItems] = useState<SalesOrder['items']>([]);
     const [orderCustomer, setOrderCustomer] = useState('');
@@ -176,8 +180,9 @@ const DeliveryOrderManagement: React.FC = () => {
     const [splitTargetDriverId, setSplitTargetDriverId] = useState('');
     const [splitTargetDate, setSplitTargetDate] = useState('');
 
-    // Driver Leave State
+    // Driver Leave & Service State
     const [driverLeaves, setDriverLeaves] = useState<any[]>([]);
+    const [scheduledServices, setScheduledServices] = useState<any[]>([]);
 
 
     // AI Autocomplete State
@@ -192,20 +197,43 @@ const DeliveryOrderManagement: React.FC = () => {
     // -- Mode A: V2 Search --
     const [v2Items, setV2Items] = useState<V2Item[]>([]);
 
-    // --- EFFECTS ---
-
     // Fetch Data
     const fetchData = async () => {
+
         try {
-            const [usersRes, ordersRes, itemsRes, leavesRes, lorriesRes] = await Promise.all([
+            // 1. Fetch Upcoming Services (Next 2 Weeks) independent of the big Promise.all to avoid index errors
+            const today = new Date().toISOString().split('T')[0];
+            const endDate = new Date();
+            endDate.setDate(endDate.getDate() + 14);
+            const endDateStr = endDate.toISOString().split('T')[0];
+
+            const { data: serviceData } = await supabase
+                .from('lorry_service_requests')
+                .select('*')
+                .gte('scheduled_date', today)
+                .lte('scheduled_date', endDateStr)
+                .neq('status', 'Completed');
+
+            if (serviceData) setLorryServices(serviceData);
+
+            const [usersRes, ordersRes, itemsRes, leavesRes, lorriesRes, servicesRes] = await Promise.all([
                 supabase.from('users_public').select('*').eq('role', 'Driver'),
                 supabase.from('sales_orders').select('*').order('trip_sequence', { ascending: true }).order('created_at', { ascending: false }),
                 getV2Items(),
                 supabase.from('driver_leave').select('*'),
-                supabase.from('lorries').select('*')
+                supabase.from('lorries').select('*'),
+                supabase.from('lorry_service_requests').select('*').eq('status', 'Scheduled')
             ]);
 
-            if (leavesRes.data) setDriverLeaves(leavesRes.data);
+            // ... (rest of existing logic)
+            if (leavesRes.data) {
+                // console.log("Loaded leaves:", leavesRes.data.length); 
+                // TEMPORARY DEBUG: Check if we can verify other users' leaves
+                if (leavesRes.data.length === 0) console.warn("DEBUG: No leaves loaded! Possible RLS blocking.");
+                setDriverLeaves(leavesRes.data);
+            }
+
+            if (servicesRes.data) setScheduledServices(servicesRes.data);
             if (itemsRes) setV2Items(itemsRes);
             if (lorriesRes.data) {
                 const mappedLorries: Lorry[] = lorriesRes.data.map(l => ({
@@ -258,35 +286,77 @@ const DeliveryOrderManagement: React.FC = () => {
         return `${d}/${m}/${y}`;
     };
 
-    const checkLeaveConflict = (driverId: string, orderDateStr?: string) => {
-        if (!driverId || driverId === 'unassigned') return true; // Fix: was return false
+    const checkDriverAvailability = (driverId: string, orderDateStr?: string) => {
+        // console.log("Checking availability for:", driverId, orderDateStr);
+        // console.log("Leaves:", driverLeaves);
 
-        const targetDateStr = orderDateStr || new Date().toISOString().split('T')[0];
+        if (!driverId || driverId === 'unassigned') return true;
+
+        // Helper: Ensure YYYY-MM-DD format (Local Time safe)
+        const toDateString = (date: string | Date) => {
+            if (!date) return '';
+            if (typeof date === 'string') {
+                // Check if it looks like an ISO string with time
+                if (date.includes('T')) return new Date(date).toLocaleDateString('en-CA');
+                return date;
+            }
+            // Use en-CA for YYYY-MM-DD format in local time
+            return new Date(date).toLocaleDateString('en-CA');
+        };
+
+        const targetDateStr = toDateString(orderDateStr || new Date());
         const driverName = drivers.find(d => d.uid === driverId)?.name || 'Driver';
 
-        // Check for exact date match
-        const conflict = driverLeaves.filter(l => l.status !== 'Rejected').find(l => {
+        // DEBUG: Temporary check to see if data is loaded
+        // if (driverLeaves.length === 0) alert("DEBUG: No leave records loaded!");
+
+        // 1. BLOCK: Check for exact Leave date match
+        // 1. BLOCK: Check for exact Leave date match (String Comparison)
+        const strictConflict = driverLeaves.filter(l => l.status !== 'Rejected').find(l => {
             if (l.driver_id !== driverId) return false;
-            return targetDateStr >= l.start_date && targetDateStr <= l.end_date;
+            // Robust comparison:
+            const startStr = toDateString(l.start_date);
+            const endStr = toDateString(l.end_date);
+            return targetDateStr >= startStr && targetDateStr <= endStr;
         });
 
-        if (conflict) {
-            return window.confirm(`⚠️ WARNING: ${driverName} has leave from ${formatDateDMY(conflict.start_date)} to ${formatDateDMY(conflict.end_date)}.\n\nThis trip date (${formatDateDMY(targetDateStr)}) is during their leave.\n\nStill assign?`);
+        if (strictConflict) {
+            alert(`⛔ BLOCKED: ${driverName} is on leave from ${formatDateDMY(strictConflict.start_date)} to ${formatDateDMY(strictConflict.end_date)}.\n\nCannot assign orders on ${formatDateDMY(targetDateStr)}.`);
+            return false;
         }
 
-        // Near-future Warning (3 days before leave starts)
+        // 2. WARN: Near-future Warning (3 days before leave starts)
+        // 2. WARN: Near-future Warning (3 days before leave starts)
         const targetDateObj = new Date(targetDateStr);
         const nearConflict = driverLeaves.filter(l => l.status !== 'Rejected').find(l => {
             if (l.driver_id !== driverId) return false;
-            const start = new Date(l.start_date);
-            const bufferDate = new Date(start);
-            bufferDate.setDate(start.getDate() - 3);
+
+            const startStr = toDateString(l.start_date);
+            const start = new Date(startStr);
+            const bufferDate = new Date(startStr);
+            bufferDate.setDate(bufferDate.getDate() - 3);
+
+            // Re-convert to objects for consistent comparison (ignoring time)
             return targetDateObj >= bufferDate && targetDateObj < start;
         });
 
         if (nearConflict) {
-            return window.confirm(`💡 SMART REMINDER: ${driverName} will be on leave starting ${formatDateDMY(nearConflict.start_date)} (in 3 days or less).\n\nProceed with this assignment?`);
+            const confirmLeaveWithUser = window.confirm(`💡 LEAVE REMINDER: ${driverName} will be on leave starting ${formatDateDMY(nearConflict.start_date)} (in 3 days or less).\n\nAre you sure you want to assign this trip?`);
+            if (!confirmLeaveWithUser) return false;
         }
+
+        // 3. WARN: Service Date Conflict
+        // 3. WARN: Service Date Conflict
+        const serviceConflict = scheduledServices.find(s => {
+            if (s.driver_id !== driverId) return false;
+            return toDateString(s.scheduled_date) === targetDateStr;
+        });
+
+        if (serviceConflict) {
+            const confirmService = window.confirm(`🔧 SERVICE WARNING: The lorry for ${driverName} is scheduled for maintenance on ${formatDateDMY(targetDateStr)}.\n\nProceed with assignment?`);
+            if (!confirmService) return false;
+        }
+
         return true;
     };
 
@@ -305,9 +375,10 @@ const DeliveryOrderManagement: React.FC = () => {
         const userInfo = supabase.channel('driver-changes')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'users_public' }, () => {
                 console.log("Realtime: Driver list changed, fetching...");
-                fetchData(); // Keep this active as adding drivers is rare and safely syncable
+                fetchData();
             })
             .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_leave' }, () => fetchData())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'lorry_service_requests' }, () => fetchData())
             .subscribe();
 
         return () => {
@@ -362,7 +433,7 @@ const DeliveryOrderManagement: React.FC = () => {
         // Smart Reminder
         if (newDriverId && newDriverId !== oldDriverId) {
             const order = orders.find(o => o.id === orderId);
-            if (!checkLeaveConflict(newDriverId, order?.deadline)) return;
+            if (!checkDriverAvailability(newDriverId, order?.deadline)) return;
         }
 
         // 1. Get all orders for the DESTINATION driver
@@ -528,8 +599,10 @@ const DeliveryOrderManagement: React.FC = () => {
     const handleReassignDriver = async (driverId: string) => {
         if (!reassignOrder) return;
 
-        // Smart Reminder
-        if (!checkLeaveConflict(driverId, reassignOrder.deadline)) return;
+        if (!reassignOrder) return;
+
+        // Smart Reminder / Blocker
+        if (!checkDriverAvailability(driverId, reassignOrder.deadline)) return;
 
         try {
             // Optimistic Update
@@ -651,6 +724,7 @@ const DeliveryOrderManagement: React.FC = () => {
     */
 
     const handleSubmitOrder = async () => {
+
         // if (!orderCustomer.trim()) return alert("Enter Customer Name");  <-- Removed validation
         if (newOrderItems.length === 0) return alert("Add at least one item");
 
@@ -687,9 +761,18 @@ const DeliveryOrderManagement: React.FC = () => {
             };
 
             // LEAVE CONFLICT CHECK BEFORE SUBMISSION
-            if (payload.driver_id && payload.deadline) {
-                const ok = checkLeaveConflict(payload.driver_id, payload.deadline);
-                if (!ok) return; // User cancelled
+            // Fallback to order_date if deadline is not set
+            const effectiveDate = payload.deadline || payload.order_date;
+
+            // DEBUG: Spy on the data
+
+
+            if (payload.driver_id && effectiveDate) {
+                // Double check it's not "null" string or something weird
+                if (String(payload.driver_id) !== 'null' && String(payload.driver_id) !== '') {
+                    const ok = checkDriverAvailability(payload.driver_id, effectiveDate);
+                    if (!ok) return; // User cancelled or blocked
+                }
             }
 
             let newOrderObj: SalesOrder | null = null;
@@ -855,55 +938,12 @@ const DeliveryOrderManagement: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-slate-950 text-slate-100 p-6 font-sans selection:bg-blue-500/30">
-            {/* LEAVE & INFO BANNERS */}
-            <div className="flex flex-col gap-3 mb-6">
-                {driversOnLeaveToday.length > 0 && (
-                    <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center justify-between animate-pulse">
-                        <div className="flex items-center gap-3">
-                            <div className="bg-red-500 p-2 rounded-xl text-white">
-                                <AlertTriangle size={20} />
-                            </div>
-                            <div>
-                                <div className="text-sm font-black text-red-400 uppercase tracking-widest leading-none mb-1">Drivers on Holiday Today</div>
-                                <div className="text-xs font-bold text-red-500/80">
-                                    {driversOnLeaveToday.map(d => d.name).join(', ')}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {upcomingLeaves.length > 0 && (
-                    <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className="bg-amber-500 p-2 rounded-xl text-white">
-                                <Calendar size={20} />
-                            </div>
-                            <div>
-                                <div className="text-sm font-black text-amber-400 uppercase tracking-widest leading-none mb-1">Upcoming Holidays (Next 2 Weeks)</div>
-                                <div className="text-xs font-bold text-amber-500/80">
-                                    {upcomingLeaves.map(l => `${l.driverName} (${l.start_date})`).join(', ')}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {driversOnLeaveToday.length === 0 && upcomingLeaves.length === 0 && (
-                    <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl flex items-center gap-3 text-slate-500">
-                        <Calendar size={18} />
-                        <span className="text-xs font-bold uppercase tracking-widest">No Recent or Upcoming Driver Holidays</span>
-                    </div>
-                )}
-            </div>
-
             {/* --- HEADER --- */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
                 <div>
                     <h1 className="text-3xl font-black text-white italic flex items-center gap-2">
                         <div className="bg-gradient-to-r from-blue-600 to-cyan-500 w-3 h-10 rounded-full"></div>
                         Delivery Order Management
-                        <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full font-mono border border-slate-700">v2.0</span>
                     </h1>
                     <p className="text-slate-400 mt-1 font-medium">Assign orders, track shipments, and manage fleet.</p>
                 </div>
@@ -916,7 +956,99 @@ const DeliveryOrderManagement: React.FC = () => {
                 </button>
             </div>
 
+            {/* --- STATUS DASHBOARD (Driver Leaves & Lorry Services) --- */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                {/* 1. Driver Leaves Section */}
+                <div className="flex flex-col gap-3">
+                    {driversOnLeaveToday.length > 0 && (
+                        <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center justify-between animate-pulse">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-red-500 p-2 rounded-xl text-white">
+                                    <AlertTriangle size={20} />
+                                </div>
+                                <div>
+                                    <div className="text-sm font-black text-red-400 uppercase tracking-widest leading-none mb-1">Drivers on Holiday Today</div>
+                                    <div className="text-xs font-bold text-red-500/80">
+                                        {driversOnLeaveToday.map(d => d.name).join(', ')}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {upcomingLeaves.length > 0 && (
+                        <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-amber-500 p-2 rounded-xl text-white">
+                                    <Calendar size={20} />
+                                </div>
+                                <div>
+                                    <div className="text-sm font-black text-amber-400 uppercase tracking-widest leading-none mb-1">Upcoming Holidays (Next 2 Weeks)</div>
+                                    <div className="text-xs font-bold text-amber-500/80">
+                                        {upcomingLeaves.map(l => `${l.driverName} (${l.start_date}${l.start_date !== l.end_date ? ' ➔ ' + l.end_date : ''})`).join(', ')}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {driversOnLeaveToday.length === 0 && upcomingLeaves.length === 0 && (
+                        <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl flex items-center gap-3 text-slate-500 h-full">
+                            <Calendar size={18} />
+                            <span className="text-xs font-bold uppercase tracking-widest">No Recent or Upcoming Driver Holidays</span>
+                        </div>
+                    )}
+                </div>
+
+                {/* 2. Lorry Service Reminder (Blue, Next 2 Weeks) */}
+                <div>
+                    {lorryServices.length > 0 ? (
+                        <div className="bg-blue-900/20 border border-blue-500/50 rounded-2xl p-4 flex items-start gap-4 animate-in slide-in-from-top-4 duration-500 relative overflow-hidden h-full">
+                            {/* Background Glow */}
+                            <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+
+                            <div className="p-3 bg-blue-600 rounded-xl text-white shadow-lg shadow-blue-900/20 z-10">
+                                <Wrench size={24} />
+                            </div>
+                            <div className="flex-1 z-10">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <h3 className="text-blue-400 font-black uppercase tracking-widest text-sm mb-1">Upcoming Lorry Services (Next 2 Weeks)</h3>
+                                        <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-3">Please arrange schedule accordingly.</p>
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-wrap gap-2">
+                                    {lorryServices.map(s => {
+                                        const driver = drivers.find(d => d.uid === s.driver_id);
+                                        return (
+                                            <div key={s.id} className="bg-slate-950 border border-blue-500/30 px-3 py-1.5 rounded-lg flex items-center gap-2 shadow-sm group hover:border-blue-500/60 transition-colors">
+                                                <div className="flex flex-col">
+                                                    <span className="text-white font-black font-mono text-xs tracking-wider">{s.plate_number}</span>
+                                                    <span className="text-[9px] text-blue-400 font-bold uppercase tracking-widest">{s.scheduled_date}</span>
+                                                </div>
+                                                {driver && (
+                                                    <div className="pl-2 border-l border-slate-800 text-[10px] font-bold text-slate-500 flex items-center gap-1">
+                                                        <UserIcon size={10} /> {driver.name}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl flex items-center gap-3 text-slate-500 h-full">
+                            <Wrench size={18} />
+                            <span className="text-xs font-bold uppercase tracking-widest">No Upcoming Lorry Services</span>
+                        </div>
+                    )}
+                </div>
+            </div>
+
             {/* --- FILTERS & STATS --- */}
+
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
                 {/* Search Bar */}
                 <div className="lg:col-span-2 relative">
@@ -1223,38 +1355,38 @@ const DeliveryOrderManagement: React.FC = () => {
                                         </div>
                                     </div>
                                     <div>
-<div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-[10px] font-black text-slate-600 uppercase mb-2 tracking-widest flex items-center gap-2">
-                                            <Calendar size={12} /> Order Date
-                                        </label>
-                                        <div className="relative group">
-                                            <input
-                                                type="date"
-                                                className="w-full bg-slate-900/50 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-400 focus:border-blue-500/30 outline-none appearance-none cursor-pointer [color-scheme:dark] transition-all"
-                                                value={newOrderDate}
-                                                onChange={e => setNewOrderDate(e.target.value)}
-                                            />
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-[10px] font-black text-slate-600 uppercase mb-2 tracking-widest flex items-center gap-2">
+                                                    <Calendar size={12} /> Order Date
+                                                </label>
+                                                <div className="relative group">
+                                                    <input
+                                                        type="date"
+                                                        className="w-full bg-slate-900/50 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-400 focus:border-blue-500/30 outline-none appearance-none cursor-pointer [color-scheme:dark] transition-all"
+                                                        value={newOrderDate}
+                                                        onChange={e => setNewOrderDate(e.target.value)}
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="block text-[10px] font-black text-blue-500/80 uppercase mb-2 tracking-widest flex items-center gap-2">
+                                                    <Calendar size={12} /> Delivery Date
+                                                </label>
+                                                <div className="relative group">
+                                                    <input
+                                                        type="date"
+                                                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-200 focus:border-blue-500/50 outline-none appearance-none cursor-pointer [color-scheme:dark] transition-all font-bold"
+                                                        value={newOrderDeliveryDate}
+                                                        onChange={e => setNewOrderDeliveryDate(e.target.value)}
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div>
-                                        <label className="block text-[10px] font-black text-blue-500/80 uppercase mb-2 tracking-widest flex items-center gap-2">
-                                            <Calendar size={12} /> Delivery Date
-                                        </label>
-                                        <div className="relative group">
-                                            <input
-                                                type="date"
-                                                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-200 focus:border-blue-500/50 outline-none appearance-none cursor-pointer [color-scheme:dark] transition-all font-bold"
-                                                value={newOrderDeliveryDate}
-                                                onChange={e => setNewOrderDeliveryDate(e.target.value)}
-                                            />
+                                        <div className="mt-1 flex justify-between px-1">
+                                            <div className="text-[9px] text-slate-700 font-bold uppercase">Ord: {formatDateDMY(newOrderDate) || "Today"}</div>
+                                            <div className="text-[9px] text-blue-500/60 font-black uppercase">Del: {formatDateDMY(newOrderDeliveryDate) || "Not Set"}</div>
                                         </div>
-                                    </div>
-                                </div>
-                                <div className="mt-1 flex justify-between px-1">
-                                    <div className="text-[9px] text-slate-700 font-bold uppercase">Ord: {formatDateDMY(newOrderDate) || "Today"}</div>
-                                    <div className="text-[9px] text-blue-500/60 font-black uppercase">Del: {formatDateDMY(newOrderDeliveryDate) || "Not Set"}</div>
-                                </div>
                                         <div className="mt-1 text-[10px] text-slate-600 font-bold px-1 flex justify-between">
                                             <span>Format: DD/MM/YYYY</span>
                                             {newOrderDeliveryDate && (
@@ -1599,6 +1731,7 @@ const DeliveryOrderManagement: React.FC = () => {
                     </div>
                 )
             }
+
         </div >
     );
 };

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../services/supabase';
 import { Claim } from '../types';
-import { DollarSign, FileText, Plus, X, Upload, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
+import { DollarSign, FileText, Plus, X, Upload, CheckCircle } from 'lucide-react';
 
 interface ClaimsManagementProps {
     user: any;
@@ -149,7 +149,6 @@ const ClaimsManagement: React.FC<ClaimsManagementProps> = ({ user }) => {
             ];
 
             let data;
-            let usedModel;
 
             for (const model of models) {
                 try {
@@ -200,7 +199,6 @@ mileage: 仪表盘上显示的当前总行驶里程数，必须是纯数字（�
 
                     data = await response.json();
                     if (data.candidates && data.candidates.length > 0) {
-                        usedModel = model;
                         break; // Success!
                     }
                 } catch (e) {

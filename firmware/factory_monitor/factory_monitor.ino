@@ -1,8 +1,15 @@
 
-#include <ArduinoJson.h> // ★ 新增: 请安装此库
+#include <ArduinoJson.h>
+#include <ArduinoOTA.h>
+#include <ESPmDNS.h>
 #include <HTTPClient.h>
+#include <HTTPUpdate.h>
 #include <Preferences.h> // Flash Storage
+#include <Update.h>
+#include <WebServer.h>
 #include <WiFi.h>
+
+const String CURRENT_VERSION = "3.0.0"; // ★ 当前本地固件版本
 #include <WiFiClientSecure.h>
 #include <esp_task_wdt.h> // Watchdog Timer
 #include <time.h>         // Include standard time library
@@ -15,8 +22,7 @@ const char *ssid = "ESBL_2.4GHz";
 const char *password = "88888888";
 
 // 2. Vercel API (Dynamic Config)
-const String configApiUrl =
-    "https://packsecure-os.vercel.app/api/iot-config?mac=";
+const String configApiUrl = "https://packsecure.vercel.app/api/iot-config?mac=";
 
 // --- SERVER CONFIGURATION ---
 const char *supabaseUrl =
@@ -53,7 +59,15 @@ Preferences preferences;
 // NTP 服务器
 const char *ntpServer = "pool.ntp.org";
 
+// --- WEB SERVER & OTA ---
+WebServer server(80);
+const char *otaPath = "/update";
+const char *otaUser = "admin";
+const char *otaPass = "packsecure";
+
 // 函数声明
+void setupOTA();
+void performCloudUpdate(String url);
 void updateRemoteConfig();
 void connectWiFi();
 void handleNetworkQueue();
@@ -62,11 +76,14 @@ bool isTimeSet();
 String getISOTime(time_t rawtime);
 void saveQueue();
 void loadQueue();
+void handleRoot();
+void handleUpdateResponse();
+void handleUpdateUpload();
 
 void setup() {
   Serial.begin(115200);
   delay(1000);
-  Serial.println("\n\n--- NILAI PRODUCTION FIRMWARE (PRO VERSION v2.0) ---");
+  Serial.println("\n\n--- NILAI PRODUCTION FIRMWARE (OTA READY v3.0) ---");
 
   pinMode(relayPin, INPUT_PULLUP);
   pinMode(ledPin, OUTPUT);
@@ -74,6 +91,8 @@ void setup() {
   connectWiFi();
   if (WiFi.status() == WL_CONNECTED) {
     Serial.println("WiFi已连接! MAC: " + WiFi.macAddress());
+    setupOTA(); // ★ 启动 OTA 和 Web Server
+  } else {
     Serial.println("WiFi连接失败，请检查 SSID/密码 或 2.4G 频段");
   }
 
@@ -87,17 +106,26 @@ void setup() {
   Serial.println("STEP 3: 同步云端配置...");
   updateRemoteConfig();
 
-  // Watchdog - 尝试静默重新配置
+// Watchdog - 30 seconds
+#if ESP_IDF_VERSION_MAJOR >= 5
   esp_task_wdt_config_t wdt_config = {.timeout_ms = WDT_TIMEOUT * 1000,
-                                      .idle_core_mask = (1 << 0),
+                                      .idle_core_mask = 0,
                                       .trigger_panic = true};
-
   esp_task_wdt_reconfigure(&wdt_config);
+#else
+  esp_task_wdt_init(WDT_TIMEOUT, true);
+#endif
   esp_task_wdt_add(NULL);
 }
 
 void loop() {
   esp_task_wdt_reset();
+
+  // 处理 OTA 和 Web 请求
+  if (WiFi.status() == WL_CONNECTED) {
+    server.handleClient();
+    ArduinoOTA.handle();
+  }
 
   // 每 60 秒自动同步一次产量
   static unsigned long lastConfigSync = 0;
@@ -177,6 +205,16 @@ void updateRemoteConfig() {
           currentSku = doc["sku"].as<String>();
           if (doc.containsKey("machine_id")) {
             machineId = doc["machine_id"].as<String>();
+          }
+          if (doc.containsKey("latest_version") &&
+              doc.containsKey("download_url")) {
+            String latestVersion = doc["latest_version"].as<String>();
+            String downloadUrl = doc["download_url"].as<String>();
+            if (latestVersion > CURRENT_VERSION) {
+              Serial.println("发现新版本: " + latestVersion +
+                             "，准备远程升级...");
+              performCloudUpdate(downloadUrl);
+            }
           }
           Serial.printf("Remote Sync Success: SKU=%s, Yield=%d, Machine=%s\n",
                         currentSku.c_str(), currentYield, machineId.c_str());
@@ -290,4 +328,105 @@ bool sendToSupabase(int count, time_t timestamp) {
   int res = http.POST(json);
   http.end();
   return (res >= 200 && res < 300) || (res >= 400 && res < 500);
+}
+
+// --- OTA 逻辑实现 ---
+void setupOTA() {
+  String mac = WiFi.macAddress();
+  mac.replace(":", "");
+  String hostName = "nilai-" + mac;
+
+  if (MDNS.begin(hostName.c_str())) {
+    Serial.println("mDNS 响应已启动: http://" + hostName + ".local");
+  }
+
+  // Web Server 路由
+  server.on("/", HTTP_GET, handleRoot);
+  server.on(
+      otaPath, HTTP_POST, []() { handleUpdateResponse(); },
+      []() { handleUpdateUpload(); });
+
+  server.begin();
+  Serial.println("Web Server 升级入口已启动: http://" +
+                 WiFi.localIP().toString() + otaPath);
+
+  // Arduino IDE OTA
+  ArduinoOTA.setHostname(hostName.c_str());
+  ArduinoOTA.setPassword("packsecure");
+  ArduinoOTA.begin();
+}
+
+void handleRoot() {
+  String html = "<html><head><title>Nilai OTA</title></head><body>";
+  html += "<h1>Nilai Sensor Maintenance</h1>";
+  html += "<p>MAC: " + WiFi.macAddress() + "</p>";
+  html += "<p>Vercel API: <a href='" + configApiUrl + WiFi.macAddress() + "'>" +
+          configApiUrl + "</a></p>";
+  html += "<hr><h3>Firmware Update</h3>";
+  html += "<form method='POST' action='" + String(otaPath) +
+          "' enctype='multipart/form-data'>";
+  html += "<input type='file' name='update'><input type='submit' value='Update "
+          "Now'>";
+  html += "</form></body></html>";
+  server.send(200, "text/html", html);
+}
+
+void handleUpdateResponse() {
+  server.sendHeader("Connection", "close");
+  server.send(200, "text/plain",
+              (Update.hasError()) ? "FAIL" : "OK. REBOOTING...");
+  delay(1000);
+  ESP.restart();
+}
+
+void handleUpdateUpload() {
+  HTTPUpload &upload = server.upload();
+  if (upload.status == UPLOAD_FILE_START) {
+    Serial.printf("Update Start: %s\n", upload.filename.c_str());
+    if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
+      Update.printError(Serial);
+    }
+  } else if (upload.status == UPLOAD_FILE_WRITE) {
+    if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+      Update.printError(Serial);
+    }
+  } else if (upload.status == UPLOAD_FILE_END) {
+    if (Update.end(true)) {
+      Serial.printf("Update Success: %u bytes\nRebooting...\n",
+                    upload.totalSize);
+    } else {
+      Update.printError(Serial);
+    }
+  }
+}
+
+void performCloudUpdate(String url) {
+  WiFiClientSecure client;
+  client.setInsecure();
+
+  Serial.println("正在从外部地址下载固件: " + url);
+
+  // 临时取消关注 WDT，防止升级过程中触发重启
+  // 使用 NULL 检查确保不会因为重复操作报错
+  esp_task_wdt_delete(NULL);
+
+  t_httpUpdate_return ret = httpUpdate.update(client, url);
+
+  // 无论升级结果如何，重新加回 WDT
+  esp_task_wdt_add(NULL);
+
+  switch (ret) {
+  case HTTP_UPDATE_FAILED:
+    Serial.printf("HTTP_UPDATE_FAILED Error (%d): %s\n",
+                  httpUpdate.getLastError(),
+                  httpUpdate.getLastErrorString().c_str());
+    break;
+  case HTTP_UPDATE_NO_UPDATES:
+    Serial.println("HTTP_UPDATE_NO_UPDATES");
+    break;
+  case HTTP_UPDATE_OK:
+    Serial.println("HTTP_UPDATE_OK - 重启中...");
+    ESP.restart();
+    break;
+  }
 }

@@ -114,11 +114,20 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
             <div className="flex h-screen overflow-hidden pt-16 lg:pt-0">
                 {/* Sidebar Navigation */}
                 <aside className={`
-                    fixed inset-y-0 left-0 z-40 w-[280px] shrink-0 bg-[#1a1a1e] border-r border-white/5 flex flex-col
+                    fixed inset-y-0 left-0 z-[60] w-[280px] shrink-0 bg-[#1a1a1e] border-r border-white/5 flex flex-col
                     transform transition-transform duration-300 lg:transform-none lg:relative lg:translate-x-0
                     ${isMobileMenuOpen ? 'translate-x-0 shadow-2xl shadow-black' : '-translate-x-full'}
-                `}>        {/* Brand Area */}
-                    <div className="hidden lg:flex flex-col px-6 pt-8 pb-8">
+                `}>
+                    {/* Brand Area */}
+                    <div className="relative flex flex-col px-6 pt-8 pb-8">
+                        {/* Mobile Close Button */}
+                        <button
+                            onClick={() => setIsMobileMenuOpen(false)}
+                            className="lg:hidden absolute top-4 right-4 p-2 text-slate-500 hover:text-white bg-white/5 rounded-lg"
+                        >
+                            <X size={20} />
+                        </button>
+
                         <div className="flex items-center gap-3 mb-1">
                             <img src="/packsecure-logo.jpg" alt="PackSecure" className="h-10 rounded-lg" />
                             <div>
@@ -132,18 +141,27 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
 
                     {/* Navigation Links */}
                     <nav className="flex-1 overflow-y-auto px-4 custom-scrollbar space-y-2 pb-6">
+                        {/* SPECIAL VIEW FOR NEOSON (User 009) */}
+                        {user?.employeeId === '009' && (
+                            <NavGroup title="Neoson Workspace">
+                                <NavItem id="order-summary" icon={FileBarChart} label="Daily Prep" />
+                                <NavItem id="maintenance" icon={Wrench} label="Maintenance Control" />
+                            </NavGroup>
+                        )}
+
                         {/* EXECUTIVE SUITE (SuperAdmin, Admin, Manager) */}
                         {/* VIVIAN'S EXCLUSIVE WORKSPACE */}
                         {isVivian && (
                             <NavGroup title="Vivian Workspace">
                                 <NavItem id="livestock" icon={BarChart3} label="Live Stock" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 <NavItem id="delivery" icon={Truck} label="Delivery Orders" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                <NavItem id="order-summary" icon={FileBarChart} label="Order Summary" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 <NavItem id="maintenance" icon={Wrench} label="Maintenance Control" roles={['SuperAdmin', 'Admin', 'Manager']} />
                             </NavGroup>
                         )}
 
                         {/* EXECUTIVE SUITE (SuperAdmin, Admin, Manager) - HIDDEN FROM VIVIAN */}
-                        {!isVivian && (userRole === 'SuperAdmin' || userRole === 'Admin' || userRole === 'Manager' || user?.employeeId === '001') && (
+                        {!isVivian && user?.employeeId !== '009' && (userRole === 'SuperAdmin' || userRole === 'Admin' || userRole === 'Manager' || user?.employeeId === '001') && (
                             <>
                                 <NavGroup title="Executive Suite">
                                     <NavItem id="dashboard" icon={LayoutDashboard} label="Dashboard" roles={['SuperAdmin', 'Admin', 'Manager']} />
@@ -168,6 +186,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
 
                                 <NavGroup title="Logistics">
                                     <NavItem id="delivery" icon={Truck} label="Delivery Orders" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="order-summary" icon={FileBarChart} label="Daily Prep" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="dispatch" icon={Truck} label="Dispatch" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="maintenance" icon={Wrench} label="Maintenance Control" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                     <NavItem id="lorry-management" icon={Truck} label="Lorry Fleet" roles={['SuperAdmin', 'Admin', 'Manager']} />
@@ -187,18 +206,18 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                         )}
 
                         {/* DRIVER VIEW */}
-                        {userRole === 'Driver' && (
+                        {userRole === 'Driver' && user?.employeeId !== '009' && (
                             <NavGroup title="Driver Workspace">
                                 <NavItem id="delivery-driver" icon={Package} label="My Delivery" roles={['Driver']} />
                                 <NavItem id="delivery-history" icon={ClipboardList} label="My History" roles={['Driver']} />
                                 <NavItem id="driver-leave" icon={Calendar} label="Apply Cuti" roles={['Driver']} />
                                 <NavItem id="lorry-service" icon={Truck} label="Lorry Service" roles={['Driver']} />
-                                <NavItem id="claims" icon={FileCheck} label="My Claims" roles={['Driver']} />
+                                {/* <NavItem id="claims" icon={FileCheck} label="My Claims" roles={['Driver']} /> */}
                             </NavGroup>
                         )}
 
                         {/* OPERATOR VIEW */}
-                        {userRole === 'Operator' && (
+                        {userRole === 'Operator' && user?.employeeId !== '009' && (
                             <NavGroup title="Production Floor">
                                 <NavItem id="scanner" icon={Scan} label="Production Control" roles={['Operator']} />
                             </NavGroup>

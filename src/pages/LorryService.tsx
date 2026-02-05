@@ -12,12 +12,21 @@ const LorryService: React.FC<LorryServiceProps> = ({ user }) => {
     const [submitting, setSubmitting] = useState(false);
     const [serviceHistory, setServiceHistory] = useState<any[]>([]);
 
+    const [availableLorries, setAvailableLorries] = useState<any[]>([]);
+    const [isSelectionOpen, setIsSelectionOpen] = useState(false);
+
     useEffect(() => {
         if (user) {
             fetchDriverLorry();
             fetchServiceHistory();
+            fetchLorries();
         }
     }, [user]);
+
+    const fetchLorries = async () => {
+        const { data } = await supabase.from('lorries').select('*').eq('status', 'Available');
+        if (data) setAvailableLorries(data);
+    };
 
     const fetchDriverLorry = async () => {
         // Try to fetch from a vehicles or metadata table if available
@@ -43,39 +52,82 @@ const LorryService: React.FC<LorryServiceProps> = ({ user }) => {
             .from('lorry_service_requests')
             .select('*')
             .eq('driver_id', user.uid)
+            .neq('status', 'Completed') // Filter out completed/done items
             .order('created_at', { ascending: false });
         if (data) setServiceHistory(data);
     };
 
     const handleRequest = async () => {
         if (!plateNumber) {
-            const plate = window.prompt("Enter Lorry Plate Number:");
-            if (!plate) return;
-            setPlateNumber(plate);
-            // Auto-submit after prompt
+            setIsSelectionOpen(true);
+            return;
         }
+        submitRequest(plateNumber);
+    };
 
+    const submitRequest = async (plate: string) => {
         setSubmitting(true);
         try {
             const { error } = await supabase.from('lorry_service_requests').insert({
                 driver_id: user.uid,
-                plate_number: plateNumber || 'UNKNOWN',
+                plate_number: plate || 'UNKNOWN',
                 status: 'Pending'
             });
 
             if (error) throw error;
 
+            setPlateNumber(plate); // Remember the selection
             alert("✅ Service Request Sent to Vivian!");
             fetchServiceHistory();
         } catch (err: any) {
             alert("Error: " + err.message);
         } finally {
             setSubmitting(false);
+            setIsSelectionOpen(false);
         }
     };
 
     return (
-        <div className="min-h-screen bg-black text-slate-200 p-4 pb-20 font-sans">
+        <div className="min-h-screen bg-black text-slate-200 p-4 pb-20 font-sans relative">
+            {/* Modal: Lorry Selection */}
+            {isSelectionOpen && (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+                    <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm max-h-[80vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+                        <div className="p-6 border-b border-slate-800">
+                            <h2 className="text-xl font-black text-white uppercase tracking-wider mb-1">Select Vehicle</h2>
+                            <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Which lorry needs service?</p>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                            {availableLorries.map(lorry => (
+                                <button
+                                    key={lorry.id}
+                                    onClick={() => submitRequest(lorry.plate_number)}
+                                    className="w-full p-4 bg-slate-950 border border-slate-800 rounded-xl hover:bg-blue-900/20 hover:border-blue-500/50 flex items-center justify-between group transition-all"
+                                >
+                                    <span className="font-mono font-bold text-lg text-slate-300 group-hover:text-blue-400 decoration-slate-900">{lorry.plate_number}</span>
+                                    <div className="w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center text-slate-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                                        <Truck size={14} />
+                                    </div>
+                                </button>
+                            ))}
+                            {availableLorries.length === 0 && (
+                                <div className="text-center py-8 text-slate-600 font-bold text-sm">
+                                    No lorries found.
+                                </div>
+                            )}
+                        </div>
+                        <div className="p-4 border-t border-slate-800">
+                            <button
+                                onClick={() => setIsSelectionOpen(false)}
+                                className="w-full py-4 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-black uppercase tracking-widest text-xs transition-colors"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Header */}
             <div className="flex items-center gap-4 mb-8 pt-4">
                 <div className="p-3 bg-amber-600/20 rounded-2xl border border-amber-500/30 text-amber-400">
@@ -96,7 +148,7 @@ const LorryService: React.FC<LorryServiceProps> = ({ user }) => {
                 <div className="relative z-10 text-center">
                     <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-4">Assigned Vehicle</p>
                     <h2 className="text-4xl font-black text-white mb-8 tracking-tighter">
-                        {plateNumber || 'NO PLATE SET'}
+                        {plateNumber || 'SELECT VEHICLE'}
                     </h2>
 
                     <button
@@ -107,7 +159,7 @@ const LorryService: React.FC<LorryServiceProps> = ({ user }) => {
                         {submitting ? 'SENDING...' : (
                             <>
                                 <Wrench size={24} />
-                                Request Service
+                                {plateNumber ? 'Request Service' : 'Select Vehicle'}
                             </>
                         )}
                     </button>
@@ -131,12 +183,10 @@ const LorryService: React.FC<LorryServiceProps> = ({ user }) => {
                     serviceHistory.map((req, idx) => (
                         <div key={idx} className="bg-slate-900/80 border border-slate-800 p-5 rounded-3xl flex justify-between items-center transition-all hover:border-slate-700">
                             <div className="flex items-center gap-4">
-                                <div className={`p-2 rounded-xl ${req.status === 'Completed' ? 'bg-green-500/10 text-green-500' :
-                                        req.status === 'Scheduled' ? 'bg-blue-500/10 text-blue-500' :
-                                            'bg-amber-500/10 text-amber-500'
+                                <div className={`p-2 rounded-xl ${req.status === 'Scheduled' ? 'bg-blue-500/10 text-blue-500' :
+                                        'bg-amber-500/10 text-amber-500'
                                     }`}>
-                                    {req.status === 'Completed' ? <CheckCircle size={20} /> :
-                                        req.status === 'Scheduled' ? <Clock size={20} /> : <AlertCircle size={20} />}
+                                    {req.status === 'Scheduled' ? <Clock size={20} /> : <AlertCircle size={20} />}
                                 </div>
                                 <div>
                                     <div className="text-white font-bold text-sm uppercase">Maintenance Request</div>
@@ -145,9 +195,8 @@ const LorryService: React.FC<LorryServiceProps> = ({ user }) => {
                                     </div>
                                 </div>
                             </div>
-                            <div className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase ${req.status === 'Completed' ? 'bg-green-500/20 text-green-400' :
-                                    req.status === 'Scheduled' ? 'bg-blue-500/20 text-blue-400' :
-                                        'bg-amber-500/20 text-amber-400'
+                            <div className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase ${req.status === 'Scheduled' ? 'bg-blue-500/20 text-blue-400' :
+                                    'bg-amber-500/20 text-amber-400'
                                 }`}>
                                 {req.status}
                             </div>

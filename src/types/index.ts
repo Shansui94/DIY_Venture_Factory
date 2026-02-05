@@ -38,6 +38,7 @@ export interface User {
     taxNo?: string;
     bankName?: string;
     bankAccountNo?: string;
+    factoryId?: string; // NEW: Assigned Factory (T1, N1, etc.)
 }
 
 // 3. Job Order (Production Task)
@@ -101,7 +102,9 @@ export interface SalesOrder {
     driverName?: string; // NEW: Resolved Driver Name for display
     deliveryAddress?: string; // Mapped from delivery_address
     zone?: string; // Mapped from zone
+    factoryId?: string; // NEW: Factory ID (T1/N1)
     tripSequence?: number; // Mapped from trip_sequence
+    sourceLocation?: string; // NEW: Source Location (e.g., OPM Lama, SPD)
 
     // Logistics V2
     trip_id?: string;

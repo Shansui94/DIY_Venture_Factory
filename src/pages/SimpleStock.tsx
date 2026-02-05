@@ -176,6 +176,8 @@ const SimpleStock: React.FC<SimpleStockProps> = ({ onClose, isModal = false, onS
     const [items, setItems] = useState<V2Item[]>([]);
     const [drivers, setDrivers] = useState<any[]>([]);
     const [stockMap, setStockMap] = useState<Record<string, number>>({});
+    const [driverLeaves, setDriverLeaves] = useState<any[]>([]);
+    const [scheduledServices, setScheduledServices] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
     // Form State
@@ -218,6 +220,13 @@ const SimpleStock: React.FC<SimpleStockProps> = ({ onClose, isModal = false, onS
 
             if (driverData) setDrivers(driverData);
 
+            // Fetch Leaves & Services for validation
+            const { data: leaves } = await supabase.from('driver_leave').select('*');
+            if (leaves) setDriverLeaves(leaves);
+
+            const { data: services } = await supabase.from('lorry_service_requests').select('*').eq('status', 'Scheduled');
+            if (services) setScheduledServices(services);
+
             const { data: stockData } = await supabase.rpc('get_live_stock_viewer');
             if (stockData) {
                 const map: Record<string, number> = {};
@@ -235,6 +244,83 @@ const SimpleStock: React.FC<SimpleStockProps> = ({ onClose, isModal = false, onS
     useEffect(() => {
         loadData();
     }, []);
+
+    // Helper: Ensure YYYY-MM-DD format (Local Time safe)
+    const toDateString = (date: string | Date) => {
+        if (!date) return '';
+        if (typeof date === 'string') {
+            if (date.includes('T')) return new Date(date).toLocaleDateString('en-CA');
+            return date;
+        }
+        return new Date(date).toLocaleDateString('en-CA');
+    };
+
+    const checkDriverAvailability = (driverId: string, orderDateStr?: string) => {
+        if (!driverId || driverId === 'unassigned') return true;
+
+        const targetDateStr = toDateString(orderDateStr || new Date());
+        const driverName = drivers.find(d => d.id === driverId)?.name || 'Driver';
+
+        // 1. BLOCK: Check for exact Leave date match
+        const strictConflict = driverLeaves.filter(l => l.status !== 'Rejected').find(l => {
+            if (l.driver_id !== driverId) return false;
+            const startStr = toDateString(l.start_date);
+            const endStr = toDateString(l.end_date);
+            return targetDateStr >= startStr && targetDateStr <= endStr;
+        });
+
+        if (strictConflict) {
+            alert(`⛔ BLOCKED: ${driverName} is on leave from ${formatDateDMY(strictConflict.start_date)} to ${formatDateDMY(strictConflict.end_date)}.\n\nCannot assign orders on ${formatDateDMY(targetDateStr)}.`);
+            return false;
+        }
+
+        // 2. WARN: Near-future Warning (3 days before leave starts)
+        const targetDateObj = new Date(targetDateStr);
+        const nearConflict = driverLeaves.filter(l => l.status !== 'Rejected').find(l => {
+            if (l.driver_id !== driverId) return false;
+
+            const startStr = toDateString(l.start_date);
+            const start = new Date(startStr);
+            const bufferDate = new Date(startStr);
+            bufferDate.setDate(bufferDate.getDate() - 3);
+
+            return targetDateObj >= bufferDate && targetDateObj < start;
+        });
+
+        if (nearConflict) {
+            const confirmLeaveWithUser = window.confirm(`💡 LEAVE REMINDER: ${driverName} will be on leave starting ${formatDateDMY(nearConflict.start_date)} (in 3 days or less).\n\nAre you sure you want to assign this trip?`);
+            if (!confirmLeaveWithUser) return false;
+        }
+
+        // 3. WARN: Service Date Conflict
+        const serviceConflict = scheduledServices.find(s => {
+            if (s.driver_id !== driverId) return false;
+            return toDateString(s.scheduled_date) === targetDateStr;
+        });
+
+        if (serviceConflict) {
+            const confirmService = window.confirm(`🔧 SERVICE WARNING: The lorry for ${driverName} is scheduled for maintenance on ${formatDateDMY(targetDateStr)}.\n\nProceed with assignment?`);
+            if (!confirmService) return false;
+        }
+
+        return true;
+    };
+
+    // Auto-check availability when Driver or Date changes
+    useEffect(() => {
+        if (selectedDriver && (deliveryDate || entryDate)) {
+            // Use timeout to prevent blocked render loop if alert/confirm is shown
+            const timer = setTimeout(() => {
+                const dateToCheck = deliveryDate || entryDate;
+                const ok = checkDriverAvailability(selectedDriver, dateToCheck);
+                if (!ok) {
+                    // Reset selection if user cancels or is blocked
+                    setSelectedDriver('');
+                }
+            }, 200);
+            return () => clearTimeout(timer);
+        }
+    }, [selectedDriver, deliveryDate, entryDate]);
 
     // Add to Cart
     const handleAddToCart = () => {
@@ -281,6 +367,9 @@ const SimpleStock: React.FC<SimpleStockProps> = ({ onClose, isModal = false, onS
         if (cart.length === 0) return alert("Please add at least one item.");
         if (!selectedDriver) return alert("Please select a Driver.");
         if (!selectedState) return alert("Please select a State.");
+
+        // Driver Check
+        if (!checkDriverAvailability(selectedDriver, deliveryDate || entryDate)) return;
 
         const driverObj = drivers.find(d => d.id === selectedDriver);
         const driverName = driverObj ? driverObj.name.split(' ')[0] : 'Driver';

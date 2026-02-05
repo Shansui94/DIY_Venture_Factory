@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { HardHat, Truck, Mail, Lock } from 'lucide-react'; // Added Mail, Lock
+import { Mail, Lock } from 'lucide-react'; // Added Mail, Lock
 import { supabase } from '../services/supabase';
 
 interface LoginProps {
@@ -16,7 +16,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
     const [staffPassword, setStaffPassword] = useState<string>(''); // Staff Password
 
     // Mode State: 'device' | 'staff'
-    const [loginMode, setLoginMode] = useState<'device' | 'staff'>('staff');
+    const [loginMode] = useState<'device' | 'staff'>('staff');
     // Forgot Password State
     const [isForgotPassword, setIsForgotPassword] = useState(false);
     const [resetEmail, setResetEmail] = useState('');
@@ -413,7 +413,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
                         )}
 
                         {/* TOGGLE LINK */}
-                        <div className="mt-8 text-center pt-6 border-t border-white/5">
+                        {/* <div className="mt-8 text-center pt-6 border-t border-white/5">
                             <button
                                 onClick={() => {
                                     setLoginMode(loginMode === 'device' ? 'staff' : 'device');
@@ -431,7 +431,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
                                     </>
                                 )}
                             </button>
-                        </div>
+                        </div> */}
                     </>
                 )}
             </div>

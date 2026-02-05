@@ -1,0 +1,59 @@
+--- Inspecting 'users_public' (Top 2) ---
+[
+  {
+    "id": "f05747b6-e464-43fb-8672-1931e2bbad26",
+    "email": "sam.6434@packsecure.com",
+    "name": "SAM",
+    "role": "Driver",
+    "phone": null,
+    "address": null,
+    "photo_url": null,
+    "employee_id": "6434",
+    "status": "Active",
+    "created_at": "2026-01-28T06:04:47.33713+00:00",
+    "updated_at": "2026-01-28T06:04:47.33713+00:00",
+    "salary": 1500
+  },
+  {
+    "id": "cc2dc059-b4ea-4457-bd40-bca51eb25ec6",
+    "email": "mahadi.1321@packsecure.com",
+    "name": "Mahadi",
+    "role": "Driver",
+    "phone": null,
+    "address": null,
+    "photo_url": null,
+    "employee_id": "1321",
+    "status": "Active",
+    "created_at": "2026-01-28T06:04:47.832333+00:00",
+    "updated_at": "2026-01-28T06:04:47.832333+00:00",
+    "salary": 1500
+  }
+]
+
+--- Inspecting 'sys_users_v2' (Top 2) ---
+[
+  {
+    "id": "891f2ec1-20cd-4a94-ae28-1f50be0706ae",
+    "auth_user_id": "e3e86cad-4c81-4084-82d0-c1f9c2d9222b",
+    "employee_id": "EMP-e3e8",
+    "name": "admin@diyventure.com",
+    "role": "Operator",
+    "department": null,
+    "status": "Active",
+    "photo_url": null,
+    "created_at": "2025-12-29T11:30:06.747157+00:00",
+    "pin_code": "1234"
+  },
+  {
+    "id": "44ae7254-fc00-44f8-88d5-10d364979e43",
+    "auth_user_id": "d1c24ad1-85c2-4f45-9b6d-d3bb36e13390",
+    "employee_id": "EMP-d1c2",
+    "name": "khailoon94@gmail.com",
+    "role": "Operator",
+    "department": null,
+    "status": "Active",
+    "photo_url": null,
+    "created_at": "2025-12-29T11:30:06.747157+00:00",
+    "pin_code": "1234"
+  }
+]

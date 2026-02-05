@@ -91,7 +91,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             yield: yieldCount,
             debounce: device.debounce_ms,
             version: device.firmware_version,
-            cutting_size: cuttingSize
+            cutting_size: cuttingSize,
+            // 远程升级配置
+            latest_version: "3.0.0",
+            download_url: "https://raw.githubusercontent.com/Shansui94/packsecure/main/firmware/factory_monitor/firmware.bin"
         });
 
     } catch (error: any) {
