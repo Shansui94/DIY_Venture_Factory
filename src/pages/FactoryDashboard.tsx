@@ -12,6 +12,7 @@ interface MachineStats {
     reboot_count: number;
     gap_count: number;
     health_status: 'Healthy' | 'Warning' | 'Critical';
+    last_heartbeat?: string; // New
 }
 
 const FactoryDashboard = () => {
@@ -112,13 +113,14 @@ const FactoryDashboard = () => {
         today.setHours(0, 0, 0, 0);
         const todayISO = today.toISOString();
 
-        // 1. Initialize all registered machines as Offline
+        // 1. Initialize all registered machines
         if (registeredMachines) {
-            registeredMachines.forEach(m => {
+            registeredMachines.forEach((m: any) => {
                 stats[m.machine_id] = {
                     machine_id: m.machine_id,
                     total_count: 0,
-                    last_seen: todayISO, // Default to start of day
+                    last_seen: m.last_heartbeat || todayISO, // Use heartbeat if available
+                    last_heartbeat: m.last_heartbeat,
                     status: 'Offline',
                     current_product: undefined,
                     reboot_count: 0,
@@ -195,15 +197,24 @@ const FactoryDashboard = () => {
         const now = new Date().getTime();
         Object.keys(stats).forEach(key => {
             const m = stats[key];
-            const timeDiff = now - new Date(m.last_seen).getTime();
+            // Online/Offline Logic
+            // 1. If producing (last_seen < 6 mins), then ONLINE
+            // 2. If NOT producing, but Heartbeat < 2 mins, then ONLINE (Idle)
+            // 3. Else OFFLINE
 
-            // Online/Offline
-            // Only consider online if last_seen > today start AND < 6 mins ago
-            // But last_seen defaults to todayISO. So we need check if it was actually updated?
-            // Actually timeDiff logic works fine: if last_seen is 00:00, timeDiff will be huge -> Offline.
+            const productionDiff = now - new Date(m.last_seen).getTime();
+            let heartbeatDiff = 99999999;
+            if (m.last_heartbeat) {
+                heartbeatDiff = now - new Date(m.last_heartbeat).getTime();
+            }
 
-            if (timeDiff < 360000) { // 6 mins
+            if (productionDiff < 360000) { // 6 mins production
                 m.status = 'Online';
+            } else if (heartbeatDiff < 180000) { // 3 mins heartbeat (give some buffer)
+                m.status = 'Online';
+                // We could add 'Idle' state, but UI only supports Online/Offline currently.
+                // Online is fine, but maybe change text to "Online (Idle)"?
+                // For now, keep 'Online' to satisfy user "it should be online".
             } else {
                 m.status = 'Offline';
             }

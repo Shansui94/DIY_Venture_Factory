@@ -35,6 +35,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             .eq('mac_address', mac)
             .single();
 
+        // 1.5 Update Heartbeat (New)
+        if (device) {
+            await supabase.from('iot_device_configs')
+                .update({ last_heartbeat: new Date().toISOString() })
+                .eq('mac_address', mac);
+        }
+
         if (deviceError || !device) {
             // 2. 自动注册
             await supabase.from('iot_device_configs').upsert({

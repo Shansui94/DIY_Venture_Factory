@@ -20,14 +20,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-        const { data, error } = await supabase
+        // 1. Fetch Machines
+        const { data: machines, error: mError } = await supabase
             .from('sys_machines_v2')
             .select('*')
             .order('machine_id');
 
-        if (error) throw error;
+        if (mError) throw mError;
 
-        return res.status(200).json(data);
+        // 2. Fetch IoT Configs (to get heartbeats)
+        const { data: iotConfigs, error: iError } = await supabase
+            .from('iot_device_configs')
+            .select('machine_id, last_heartbeat');
+
+        if (iError) throw iError;
+
+        // 3. Merge Heartbeat
+        const result = machines.map((m: any) => {
+            const iot = iotConfigs.find((i: any) => i.machine_id === m.machine_id);
+            return {
+                ...m,
+                last_heartbeat: iot ? iot.last_heartbeat : null
+            };
+        });
+
+        return res.status(200).json(result);
     } catch (error: any) {
         return res.status(500).json({ error: error.message });
     }
