@@ -299,10 +299,10 @@ const FactoryDashboard = () => {
                             </h2>
                             <div className="flex flex-col items-end gap-1">
                                 <span className={`px-3 py-1 rounded-full text-xs font-semibold ${machine.status === 'Online'
-                                    ? 'bg-green-100 text-green-700 animate-pulse'
+                                    ? ((machine.total_count === 0 && !machine.current_product) ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700 animate-pulse')
                                     : 'bg-gray-100 text-gray-500'
                                     }`}>
-                                    {machine.status.toUpperCase()}
+                                    {machine.status === 'Online' && machine.total_count === 0 ? 'READY' : machine.status.toUpperCase()}
                                 </span>
                                 {/* Health Badge */}
                                 {machine.health_status !== 'Healthy' && (
@@ -318,7 +318,9 @@ const FactoryDashboard = () => {
                         <div className="mb-4 bg-gray-50 px-3 py-2 rounded-lg border border-gray-100 flex flex-col gap-1">
                             <div className="flex items-center gap-2">
                                 <div className={`w-3 h-3 rounded-full ${machine.status === 'Online' ? 'bg-blue-500 animate-pulse' : 'bg-gray-300'}`}></div>
-                                <span className="text-xs text-gray-500 font-bold uppercase">Running Production</span>
+                                <span className="text-xs text-gray-500 font-bold uppercase">
+                                    {machine.total_count > 0 ? 'Running Production' : 'Current Config'}
+                                </span>
                             </div>
 
                             {activeProducts[machine.machine_id] && activeProducts[machine.machine_id].length > 0 ? (
@@ -329,7 +331,9 @@ const FactoryDashboard = () => {
                                 ))
                             ) : (
                                 <div className="text-sm font-bold text-gray-700 truncate pl-5">
-                                    {machine.current_product || 'Idle / No Config'}
+                                    {machine.current_product && machine.current_product !== 'UNKNOWN'
+                                        ? machine.current_product
+                                        : (machine.status === 'Online' ? 'Ready (No Job)' : 'Idle')}
                                 </div>
                             )}
                         </div>
