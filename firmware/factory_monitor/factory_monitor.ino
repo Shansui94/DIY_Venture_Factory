@@ -18,7 +18,7 @@ const String CURRENT_VERSION = "3.0.0"; // ★ 当前本地固件版本
 #define WDT_TIMEOUT 30 // Restart if stuck for 30 seconds
 
 // --- WIFI CONFIGURATION ---
-const char *ssid = "ESBL_2.4GHz";
+const char *ssid = "opm9821_2.4Ghz@MaxisFibre";
 const char *password = "88888888";
 
 // 2. Vercel API (Dynamic Config)

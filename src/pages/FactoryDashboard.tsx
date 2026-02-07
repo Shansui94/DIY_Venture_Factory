@@ -94,10 +94,39 @@ const FactoryDashboard = () => {
     }, []);
 
     const fetchInitialData = async () => {
-        // Scope to TODAY only
+        // 0. Fetch Registered Machines FIRST via API (Bypass RLS)
+        let registeredMachines: any[] = [];
+        try {
+            const res = await fetch('/api/machines');
+            if (res.ok) {
+                registeredMachines = await res.json();
+            } else {
+                console.error("Failed to fetch machines API", res.status);
+            }
+        } catch (e) {
+            console.error("Error calling machines API", e);
+        }
+
+        const stats: { [key: string]: MachineStats } = {};
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const todayISO = today.toISOString();
+
+        // 1. Initialize all registered machines as Offline
+        if (registeredMachines) {
+            registeredMachines.forEach(m => {
+                stats[m.machine_id] = {
+                    machine_id: m.machine_id,
+                    total_count: 0,
+                    last_seen: todayISO, // Default to start of day
+                    status: 'Offline',
+                    current_product: undefined,
+                    reboot_count: 0,
+                    gap_count: 0,
+                    health_status: 'Healthy'
+                };
+            });
+        }
 
         console.log("Fetching logs since:", todayISO);
 
@@ -109,12 +138,12 @@ const FactoryDashboard = () => {
 
         if (error) {
             console.error('Error fetching initial logs:', error);
+            // Even if logs fail, set machines so UI isn't empty
+            setMachines(stats);
             return;
         }
 
-        const stats: { [key: string]: MachineStats } = {};
-
-        // Helper to process a machine if not exists
+        // Helper to process a machine if not exists (e.g. ad-hoc machine not in sys_machines_v2)
         const getStats = (id: string) => {
             if (!stats[id]) {
                 stats[id] = {
@@ -169,6 +198,10 @@ const FactoryDashboard = () => {
             const timeDiff = now - new Date(m.last_seen).getTime();
 
             // Online/Offline
+            // Only consider online if last_seen > today start AND < 6 mins ago
+            // But last_seen defaults to todayISO. So we need check if it was actually updated?
+            // Actually timeDiff logic works fine: if last_seen is 00:00, timeDiff will be huge -> Offline.
+
             if (timeDiff < 360000) { // 6 mins
                 m.status = 'Online';
             } else {
