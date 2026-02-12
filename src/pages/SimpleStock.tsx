@@ -215,10 +215,18 @@ const SimpleStock: React.FC<SimpleStockProps> = ({ onClose, isModal = false, onS
 
             const { data: driverData } = await supabase
                 .from('users_public')
-                .select('id, name, email')
-                .eq('role', 'Driver');
+                .select('*')
+                .order('name');
 
-            if (driverData) setDrivers(driverData);
+            if (driverData) {
+                // Robust filtering for Dual Roles (Manager + Driver)
+                const filteredDrivers = driverData.filter((u: any) =>
+                    u.role === 'Driver' ||
+                    u.email === 'neosonchun@gmail.com' ||
+                    u.name?.toLowerCase().includes('neoson')
+                );
+                setDrivers(filteredDrivers);
+            }
 
             // Fetch Leaves & Services for validation
             const { data: leaves } = await supabase.from('driver_leave').select('*');
@@ -452,7 +460,11 @@ const SimpleStock: React.FC<SimpleStockProps> = ({ onClose, isModal = false, onS
     });
 
     const stateOptions = MALAYSIA_STATES.map(s => ({ value: s, label: s }));
-    const driverOptions = drivers.map(d => ({ value: d.id, label: d.name, subLabel: d.email }));
+    const driverOptions = drivers.map(d => ({
+        value: d.id,
+        label: (d.name && d.name.trim() !== '') ? d.name : (d.email?.split('@')[0] || 'Unknown'),
+        subLabel: d.email
+    }));
     const placeOptions = Array.from({ length: 15 }, (_, i) => ({ value: (i + 1).toString(), label: (i + 1).toString() }));
     const locationOptions = [
         { value: 'SPD', label: 'SPD' },
