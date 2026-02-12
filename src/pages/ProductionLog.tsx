@@ -19,9 +19,9 @@ const ProductionLog: React.FC<ProductionLogProps> = ({ userRole }) => {
     const fetchLogs = async () => {
         setLoading(true);
         try {
-            // FIXED: Point to 'production_logs' (V1) because server.ts writes there
+            // UPDATED: Use the unified view
             let query = supabase
-                .from('production_logs')
+                .from('v_production_logs_unified') // Changed from 'production_logs'
                 .select('*')
                 .order('created_at', { ascending: false })
                 .limit(5000); // Increased from default 1000 to 5000
@@ -52,11 +52,13 @@ const ProductionLog: React.FC<ProductionLogProps> = ({ userRole }) => {
             });
 
             if (data) {
-                // Map V1 columns to V2 interface for UI compatibility
+                // UPDATED: Map fields from the View (sku, quantity) to the UI format
                 const mappedData = data.map((item: any) => ({
                     ...item,
-                    quantity_produced: item.alarm_count || 1, // Map alarm_count to quantity
-                    product_id: item.product_sku || 'UNKNOWN', // Map SKU
+                    // View returns 'quantity', map to UI's 'quantity_produced'
+                    quantity_produced: item.quantity,
+                    // View returns 'sku', map to UI's 'product_id'
+                    product_id: item.sku || 'UNKNOWN',
                     unit_id: 'Unit'
                 }));
                 setLogs(mappedData);

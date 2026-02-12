@@ -217,7 +217,7 @@ const DeliveryOrderManagement: React.FC = () => {
             if (serviceData) setLorryServices(serviceData);
 
             const [usersRes, ordersRes, itemsRes, leavesRes, lorriesRes, servicesRes] = await Promise.all([
-                supabase.from('users_public').select('*').eq('role', 'Driver'),
+                supabase.from('users_public').select('*'),
                 supabase.from('sales_orders').select('*').order('trip_sequence', { ascending: true }).order('created_at', { ascending: false }),
                 getV2Items(),
                 supabase.from('driver_leave').select('*'),
@@ -248,7 +248,14 @@ const DeliveryOrderManagement: React.FC = () => {
             }
 
             if (usersRes.data) {
-                const mappedDrivers: User[] = usersRes.data.map(u => ({
+                // Filter locally to ensure complex OR logic is handled correctly
+                const filteredUsers = usersRes.data.filter(u =>
+                    u.role === 'Driver' ||
+                    u.email === 'neosonchun@gmail.com' ||
+                    u.name?.toLowerCase().includes('neoson')
+                );
+
+                const mappedDrivers: User[] = filteredUsers.map(u => ({
                     uid: u.id,
                     email: u.email,
                     name: u.name || u.email?.split('@')[0] || 'Unknown Driver',
@@ -1349,7 +1356,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                                 onChange={e => setSelectedDriverId(e.target.value)}
                                             >
                                                 <option value="">-- Unassigned --</option>
-                                                {drivers.map(d => <option key={d.uid} value={d.uid}>{d.name}</option>)}
+                                                {drivers.map(d => <option key={d.uid} value={d.uid}>{d.name || d.email}</option>)}
                                             </select>
                                             <div className="absolute right-4 top-4 pointer-events-none text-slate-600">▼</div>
                                         </div>
@@ -1635,7 +1642,7 @@ const DeliveryOrderManagement: React.FC = () => {
                                         onChange={e => setSplitTargetDriverId(e.target.value)}
                                     >
                                         <option value="">Unassigned</option>
-                                        {drivers.map(d => <option key={d.uid} value={d.uid}>{d.name}</option>)}
+                                        {drivers.map(d => <option key={d.uid} value={d.uid}>{d.name || d.email}</option>)}
                                     </select>
                                 </div>
                                 <div>
@@ -1697,9 +1704,9 @@ const DeliveryOrderManagement: React.FC = () => {
                                     >
                                         <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${reassignOrder.driverId === driver.uid ? 'bg-blue-500 text-white' : 'bg-slate-800 text-slate-400'
                                             }`}>
-                                            {(driver.name || '?').charAt(0).toUpperCase()}
+                                            {(driver.name || driver.email || '?').charAt(0).toUpperCase()}
                                         </div>
-                                        <div className="font-bold text-sm text-left flex-1">{driver.name}</div>
+                                        <div className="font-bold text-sm text-left flex-1">{driver.name || driver.email}</div>
                                         {reassignOrder.driverId === driver.uid && <div className="text-[10px] font-bold uppercase bg-blue-500 text-white px-2 py-0.5 rounded-full">Current</div>}
                                     </button>
                                 ))}

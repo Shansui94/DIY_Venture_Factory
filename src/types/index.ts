@@ -161,6 +161,11 @@ export interface InventoryItem {
     qty?: number;
     id?: string;
     SKU_ID?: string;
+
+    // V2 Export Fields
+    category?: string;
+    status?: string;
+    unit?: string;
 }
 
 // 5. Production Log (Audit Trail)

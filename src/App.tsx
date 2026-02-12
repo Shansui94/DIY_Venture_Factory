@@ -326,7 +326,11 @@ function App() {
                         // Extra props for compatibility
                         id: item.sku, // Use SKU as ID
                         qty: item.current_stock,
-                        name: item.name
+                        name: item.name,
+                        // Export Fields
+                        category: item.category,
+                        status: item.status,
+                        unit: item.unit
                     }));
                     setInventory(mapped);
                 }

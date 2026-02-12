@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Search, Package, Layers, Info, Box, Activity, Component, Share2, Printer, Edit3, Hexagon } from 'lucide-react';
+import { Search, Package, Layers, Info, Box, Activity, Component, Share2, Printer, Edit3, Hexagon, Download } from 'lucide-react';
 import { getV2Items, getProducibleRecipes, getRecipeDetails, getInventoryStatus } from '../services/apiV2';
 import { V2Item, V2RecipeHeader, V2RecipeItem } from '../types/v2';
 
@@ -146,6 +146,40 @@ const ProductLibrary: React.FC = () => {
         setRecipeDetails(details);
     };
 
+    const handleExport = () => {
+        if (!items.length) {
+            alert('No items to export.');
+            return;
+        }
+
+        const headers = ['SKU', 'Name', 'Type', 'Category', 'Unit', 'Net Weight (kg)', 'Gross Weight (kg)', 'Status'];
+
+        const rows = items.map(item => {
+            const safeName = item.name.includes(',') ? `"${item.name}"` : item.name;
+            return [
+                item.sku,
+                safeName,
+                item.type,
+                item.category,
+                item.uom,
+                item.net_weight_kg || 0,
+                item.gross_weight_kg || 0,
+                item.status
+            ].join(',');
+        });
+
+        const csvContent = [headers.join(','), ...rows].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `product_library_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     return (
         <div className="min-h-screen bg-gray-950 text-gray-100 font-sans selection:bg-cyan-500/30">
             {/* Background Grid */}
@@ -167,8 +201,12 @@ const ProductLibrary: React.FC = () => {
                                 <p className="text-gray-500 text-sm mt-1">Master Data & Technical Specifications</p>
                             </div>
                             <div className="flex gap-3">
-                                <button className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-sm font-medium rounded-lg text-gray-300 border border-gray-700 transition-colors">
-                                    Import CSV
+                                <button
+                                    onClick={handleExport}
+                                    className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-sm font-medium rounded-lg text-gray-300 border border-gray-700 transition-colors"
+                                >
+                                    <Download size={16} />
+                                    Export CSV
                                 </button>
                                 <button className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-sm font-medium rounded-lg text-white shadow-[0_0_15px_rgba(37,99,235,0.3)] transition-all">
                                     + New Item

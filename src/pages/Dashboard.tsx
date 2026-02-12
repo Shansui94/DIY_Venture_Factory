@@ -38,8 +38,9 @@ const Dashboard: React.FC<DashboardProps> = ({ logs, inventory, jobs, machines =
     const pendingDispatch = jobs.filter(j => j.deliveryStatus === 'Pending').length;
 
     // 4. Machine Status
-    const filteredMachines = machines.filter(m => m.factory_id === selectedFactoryId);
-    const activeMachinesCount = filteredMachines.filter(m => m.status === 'Running').length;
+    const safeMachines = Array.isArray(machines) ? machines : [];
+    const filteredMachines = safeMachines.filter(m => m?.factory_id === selectedFactoryId);
+    const activeMachinesCount = filteredMachines.filter(m => m?.status === 'Running').length;
     // const maintenanceMachinesCount = filteredMachines.filter(m => m.status === 'Maintenance').length; // Unused
 
     // OEE Proxy: Running / Total

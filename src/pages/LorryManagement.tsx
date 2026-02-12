@@ -27,11 +27,18 @@ const LorryManagement: React.FC = () => {
         setLoading(true);
         const [lorriesRes, driversRes] = await Promise.all([
             supabase.from('lorries').select('*').order('created_at', { ascending: false }),
-            supabase.from('users_public').select('id, name').eq('role', 'Driver')
+            supabase.from('users_public').select('*').order('name')
         ]);
 
         if (lorriesRes.data) setLorries(lorriesRes.data);
-        if (driversRes.data) setDrivers(driversRes.data);
+        if (driversRes.data) {
+            const filteredDrivers = driversRes.data.filter((u: any) =>
+                u.role === 'Driver' ||
+                u.email === 'neosonchun@gmail.com' ||
+                u.name?.toLowerCase().includes('neoson')
+            );
+            setDrivers(filteredDrivers);
+        }
         setLoading(false);
     };
 
@@ -59,10 +66,12 @@ const LorryManagement: React.FC = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         const selectedDriver = drivers.find(d => d.id === formData.driver_id);
+        const driverName = selectedDriver ? (selectedDriver.name || selectedDriver.email) : null;
+
         const payload = {
             ...formData,
             driver_id: formData.driver_id || null,
-            driver_name: selectedDriver ? selectedDriver.name : null
+            driver_name: driverName
         };
 
         try {
@@ -242,7 +251,7 @@ const LorryManagement: React.FC = () => {
                                     onChange={(e) => setFormData({ ...formData, driver_id: e.target.value })}
                                 >
                                     <option value="">Unassigned</option>
-                                    {drivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                                    {drivers.map(d => <option key={d.id} value={d.id}>{d.name || d.email}</option>)}
                                 </select>
                             </div>
 

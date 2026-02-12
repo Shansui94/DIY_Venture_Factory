@@ -75,7 +75,7 @@ const Dispatch: React.FC = () => {
             const [salesRes, tripRes, userRes, vehicleRes, customerRes] = await Promise.all([
                 supabase.from('sales_orders').select('*').neq('status', 'Completed').neq('status', 'Delivered').neq('status', 'Archived').order('created_at', { ascending: false }),
                 supabase.from('logistics_trips').select('*').order('created_at', { ascending: false }),
-                supabase.from('users_public').select('*').eq('role', 'Driver'),
+                supabase.from('users_public').select('*'),
                 supabase.from('sys_vehicles').select('*').order('id'),
                 supabase.from('sys_customers').select('name, lat, lng')
             ]);
@@ -106,7 +106,14 @@ const Dispatch: React.FC = () => {
                 };
             });
 
-            const mappedDrivers: Driver[] = (userData || []).map(u => ({
+            // Filter in memory to handle dual roles correctly
+            const filteredUsers = (userData || []).filter(u =>
+                u.role === 'Driver' ||
+                u.email === 'neosonchun@gmail.com' ||
+                u.name?.toLowerCase().includes('neoson')
+            );
+
+            const mappedDrivers: Driver[] = filteredUsers.map(u => ({
                 uid: u.id,
                 name: u.name || u.email?.split('@')[0] || 'Unknown',
                 email: u.email,
@@ -473,6 +480,73 @@ const Dispatch: React.FC = () => {
                             </div>
                         ))
                     )}
+                </div>
+            )}
+            {/* Trip Creation Modal */}
+            {isTripModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsTripModalOpen(false)} />
+                    <div className="relative bg-[#1a1a1e] border border-slate-800 w-full max-w-md rounded-3xl p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-xl font-black text-white italic uppercase tracking-tighter flex items-center gap-2">
+                                <Truck className="text-indigo-500" />
+                                Confirm Trip details
+                            </h2>
+                            <button onClick={() => setIsTripModalOpen(false)} className="text-slate-500 hover:text-white">
+                                <Square size={20} className="rotate-45" /> {/* Close Icon Simulation */}
+                            </button>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Assign Driver</label>
+                                <select
+                                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white font-bold text-sm focus:border-indigo-500 outline-none"
+                                    value={tripDriverId}
+                                    onChange={(e) => setTripDriverId(e.target.value)}
+                                >
+                                    <option value="">Select Driver...</option>
+                                    {drivers.map(d => (
+                                        <option key={d.uid} value={d.uid}>
+                                            {d.name || d.email} {d.status !== 'Available' ? `(${d.status})` : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Select Vehicle</label>
+                                <select
+                                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white font-bold text-sm focus:border-indigo-500 outline-none"
+                                    value={tripVehicleId}
+                                    onChange={(e) => setTripVehicleId(e.target.value)}
+                                >
+                                    <option value="">Select Vehicle...</option>
+                                    {vehicles.map(v => (
+                                        <option key={v.id} value={v.id}>
+                                            {v.plate_number} ({v.max_volume_m3}m³)
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3 mt-8">
+                            <button
+                                onClick={() => setIsTripModalOpen(false)}
+                                className="flex-1 bg-slate-900 hover:bg-slate-800 text-slate-400 p-3 rounded-xl font-bold uppercase text-xs tracking-widest transition-all"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleCreateTrip}
+                                disabled={!tripDriverId || !tripVehicleId}
+                                className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white p-3 rounded-xl font-black uppercase text-xs tracking-widest transition-all shadow-lg shadow-indigo-900/20"
+                            >
+                                Create Trip
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
