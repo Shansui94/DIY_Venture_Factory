@@ -115,7 +115,7 @@ const Dispatch: React.FC = () => {
 
             const mappedDrivers: Driver[] = filteredUsers.map(u => ({
                 uid: u.id,
-                name: u.name || u.email?.split('@')[0] || 'Unknown',
+                name: (u.name && u.name.trim() !== '') ? u.name : (u.email?.split('@')[0] || 'Unknown'),
                 email: u.email,
                 status: 'Available',
                 activeOrders: 0
