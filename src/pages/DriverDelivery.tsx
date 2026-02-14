@@ -399,8 +399,8 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                                                             {idx + 1}
                                                         </div>
                                                         <div className="flex-1">
-                                                            <div className="text-white font-bold text-sm">{item.product}</div>
-                                                            <div className="text-[10px] text-slate-500 font-mono">Qty: {item.quantity} {item.packaging}</div>
+                                                            <div className="text-white font-bold text-sm">{(item as any).product || (item as any).name || (item as any).sku || 'Unknown Item'}</div>
+                                                            <div className="text-[10px] text-slate-500 font-mono">Qty: {item.quantity} {(item as any).packaging || (item as any).uom || ''}</div>
                                                         </div>
 
                                                         {/* Quantity Editor */}

@@ -1,0 +1,53 @@
+--- Deep Check for 8335 ---
+--- Deep Check for 8335 ---
+
+[users_public] Searching by Email: 8335@packsecure.com
+Found 1 records.
+{
+  "id": "45673d8c-787e-4c6e-9743-4b2b95f1cf51",
+  "email": "8335@packsecure.com",
+  "name": "maxtan",
+  "role": "Driver",
+  "phone": null,
+  "address": null,
+  "photo_url": null,
+  "employee_id": "8335",
+  "status": "Pending",
+  "created_at": "2026-02-07T23:35:26.530814+00:00",
+  "updated_at": "2026-02-07T23:35:25.036+00:00",
+  "salary": 1500
+}
+
+[users_public] Searching by ID: 45673d8c-787e-4c6e-9743-4b2b95f1cf51
+Found 1 records.
+{
+  "id": "45673d8c-787e-4c6e-9743-4b2b95f1cf51",
+  "email": "8335@packsecure.com",
+  "name": "maxtan",
+  "role": "Driver",
+  "phone": null,
+  "address": null,
+  "photo_url": null,
+  "employee_id": "8335",
+  "status": "Pending",
+  "created_at": "2026-02-07T23:35:26.530814+00:00",
+  "updated_at": "2026-02-07T23:35:25.036+00:00",
+  "salary": 1500
+}
+
+[sys_users_v2] Searching by ID: 45673d8c-787e-4c6e-9743-4b2b95f1cf51
+Found 1 records in sys_users_v2.
+{
+  "id": "38f575dd-8339-470a-b1cf-1b9796606886",
+  "auth_user_id": "45673d8c-787e-4c6e-9743-4b2b95f1cf51",
+  "employee_id": "EMP-45673d",
+  "name": "maxtan",
+  "role": "Driver",
+  "department": null,
+  "status": "Active",
+  "photo_url": null,
+  "created_at": "2026-02-07T23:35:26.530814+00:00",
+  "pin_code": "8335",
+  "email": "8335@packsecure.com",
+  "phone": null
+}

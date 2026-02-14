@@ -361,3 +361,33 @@ export interface Partner {
     phone?: string;
     created_at?: string;
 }
+
+// 14. Note System
+export interface Note {
+    id: string;
+    title: string;
+    content: string;
+    tags?: string[];
+    is_public: boolean;
+    created_by: string; // User ID
+    created_at?: string;
+    updated_at?: string;
+    // Joined fields
+    author_name?: string;
+}
+
+// 15. Task System
+export interface Task {
+    id: string;
+    title: string;
+    description?: string;
+    assigned_to?: string; // User ID
+    created_by: string; // User ID
+    status: 'To Do' | 'In Progress' | 'Done';
+    priority: 'Low' | 'Normal' | 'High';
+    due_date?: string;
+    created_at?: string;
+    // Joined fields
+    assignee_name?: string;
+    creator_name?: string;
+}

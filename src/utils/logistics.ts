@@ -153,39 +153,7 @@ const getZoneDistanceScore = (zone: DeliveryZone, factoryId: string): number => 
 
 // Check if Factory has enough stock for all items
 // Returns 0-100 score (100 = Full Stock, 0 = No Stock)
-const getStockScore = (items: any[], factoryId: string, globalStockMap: Record<string, any>): number => {
-    if (items.length === 0) return 100;
 
-    let totalPoints = 0;
-
-    items.forEach(orderItem => {
-        // Stock Map structure expected: { "SKU_123": { "N1": 500, "T1": 0 } }
-        // OR simplified for Phase 1: { "SKU_123": 500 } (Global)
-        // For Phase 2, we need Factory visibility.
-        // IF we only have global stock, we assume N1 has 80% and T1 has 20%? 
-        // OR we wait for get_live_stock_viewer to return split.
-
-        // TEMPORARY HACK: Assume all valid stock is in N1 (Nilai) for now,
-        // and T1 (Taiping) only has stock if explicitly marked?
-        // Better: Use random distribution or mocked data if RPC doesn't give breakdown.
-        // Since user said "Phase 1: Implement real-time stock ... show global stock",
-        // Phase 2 requires "AI ... based on stock".
-        // I will assume the stockMap passed in HAS factory keys, or I fallback.
-
-        const sku = orderItem.sku;
-        const required = orderItem.quantity;
-
-        // Mock lookup if detailed map missing
-        // Real implementation should parse the stockMap
-        const factoryStock = globalStockMap[sku]?.[factoryId] || 0;
-
-        // Basic Ratio
-        const fulfillment = Math.min(factoryStock, required) / required;
-        totalPoints += fulfillment;
-    });
-
-    return (totalPoints / items.length) * 100;
-};
 
 export const findBestFactory = (zone: DeliveryZone, items: any[], stockMap: Record<string, any>) => {
     const scored = FACTORIES.map(f => {
@@ -195,22 +163,12 @@ export const findBestFactory = (zone: DeliveryZone, items: any[], stockMap: Reco
         // 2. Stock Score (60%)
         // Hack: Since RPC only returns TOTAL stock, let's Simulate breakdown
         // N1 gets 70%, T1 gets 30% of total for simulation, UNLESS raw data differs.
-        const totalItemStock = stockMap[items[0]?.sku] || 0; // Simple check
 
         // Mock Factory Stock Distribution for Phase 2 Demo
         // In real prod, 'stockMap' should be { sku: { N1: 100, T1: 50 } }
         // Here we map global int to object on fly if needed?
         // Let's assume stockMap is currently Record<string, number>.
         // We will mock: N1 has the Main Inventory.
-        let factoryAvailable = 0;
-        if (typeof stockMap[items[0]?.sku] === 'number') {
-            // If simple number, assume N1 has it all.
-            // T1 has 0.
-            if (f.id === 'N1') factoryAvailable = stockMap[items[0]?.sku];
-        } else {
-            // Complex object
-            factoryAvailable = stockMap[items[0]?.sku]?.[f.id] || 0;
-        }
 
         // Re-calc stock score per item using this logic
         let stockScore = 0;

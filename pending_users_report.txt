@@ -1,0 +1,5 @@
+--- Scanning users_public for Pending status ---
+--- Scanning users_public for Pending status ---
+
+⚠️ Found 1 users stuck in 'Pending':
+- maxtan (8335@packsecure.com) | Role: Driver | ID: 45673d8c-787e-4c6e-9743-4b2b95f1cf51

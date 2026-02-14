@@ -1,5 +1,5 @@
 
-import { SalesOrder } from '../types';
+
 import { calculateLoad } from './logistics';
 
 export interface DraftTrip {
@@ -41,7 +41,7 @@ export const generateDraftTrips = (orders: any[]): DraftTrip[] => {
         // Need to calculate volume for sorting
         const ordersWithVol = groupOrders.map(o => {
             const stats = calculateLoad(o.items || [], null);
-            return { ...o, _vol: parseFloat(stats.totalVol), _wgt: parseFloat(stats.totalWeight) };
+            return { ...o, _vol: Number(stats.totalVol), _wgt: Number(stats.totalWeight) };
         });
 
         ordersWithVol.sort((a, b) => b._vol - a._vol);

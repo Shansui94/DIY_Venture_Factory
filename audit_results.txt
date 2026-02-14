@@ -1,0 +1,22 @@
+--- Auditing User Accounts ---
+--- Auditing User Accounts ---
+Scanned 24 active users.
+
+
+❌ [CRITICAL] 14 Users Missing PIN:
+   - Dean (Driver) | Email: dean.8499@packsecure.com | ID: eab6064a-55a9-42ab-92a5-dac237392bc9
+   - WAN (Driver) | Email: wan.2134@packsecure.com | ID: b83f0d0b-81cd-49e9-889e-8f6cea5d0da8
+   - Ameer (Driver) | Email: ameer.3190@packsecure.com | ID: db4bca04-8d15-46fe-913b-50b17f28ebcd
+   - Faizal (Driver) | Email: faizal.1700@packsecure.com | ID: 88577b56-900b-4028-bd29-0164b4139bb2
+   - Waldan (Driver) | Email: waldan.4766@packsecure.com | ID: ffe2d44c-b9a0-439e-8471-458e2388a908
+   - Yashin (Driver) | Email: yashin.1488@packsecure.com | ID: 8274bd20-fa44-4121-be67-b6e8b8c8b2d7
+   - Alif (Driver) | Email: alif.3540@packsecure.com | ID: 6d79a3d4-7947-4e5b-9ec6-d91206a1345d
+   - SAM (Driver) | Email: sam.6434@packsecure.com | ID: d166c7bc-c01f-45f5-ad03-6202c65f91e2
+   - Mahadi (Driver) | Email: mahadi.1321@packsecure.com | ID: a5f86151-c2ca-4538-a785-d35035d69c05
+   - Tahir (Driver) | Email: tahir.9524@packsecure.com | ID: ed5fcd9b-afda-4582-b7c8-8dd3844855b5
+   - Ayam (Driver) | Email: ayam.6858@packsecure.com | ID: b8f72c63-e20b-4588-8f82-e1c20ab4b83a
+   - Bob (Driver) | Email: bob.6965@packsecure.com | ID: d005d4ec-19c0-4318-96b1-8cf9d988d1f0
+   - General Customer (Driver) | Email: null | ID: 5c3558ab-72ab-4f7e-b3ec-85124d7973db
+   - Vivian (Admin) | Email: diyadmin1111@gmail.com | ID: 6022ceb0-7046-468a-bca4-02873a240815
+
+--- Audit Complete ---

@@ -37,6 +37,8 @@ import SimpleStock from './pages/SimpleStock';
 import UserManagement from './pages/UserManagement';
 import HRPortal from './pages/HRPortal';
 import IoTManagement from './pages/IoTManagement';
+import Notes from './pages/Notes';
+import Tasks from './pages/Tasks';
 
 import { User, UserRole, InventoryItem, ProductionLog as ProductionLogType, JobOrder } from './types';
 import AIAgentWidget from './components/AIAgentWidget';
@@ -667,6 +669,10 @@ function App() {
                 return <UniversalIntake />;
             case 'factory-dashboard':
                 return <FactoryDashboard />;
+            case 'notes':
+                return <Notes user={user} />;
+            case 'tasks':
+                return <Tasks user={user} />;
 
             case 'construction':
                 return <UnderConstruction title="Access Restricted" />;

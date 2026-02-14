@@ -202,6 +202,11 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, us
                                     <div className="h-4" />
                                     <NavItem id="claims" icon={FileCheck} label="Claims" roles={['SuperAdmin', 'Admin', 'Manager']} />
                                 </NavGroup>
+
+                                <NavGroup title="Productivity">
+                                    <NavItem id="notes" icon={FileText} label="Notes" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                    <NavItem id="tasks" icon={ClipboardList} label="Tasks" roles={['SuperAdmin', 'Admin', 'Manager']} />
+                                </NavGroup>
                             </>
                         )}
 
