@@ -1,12 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
-import { Note, User } from '../types';
-import { Plus, Tag, Search, Trash2, Edit2, Share2, Lock, Unlock, FileText } from 'lucide-react';
+import { Note, User as UserType } from '../types';
+import { Plus, Tag, Search, Trash2, Edit2, Share2, Lock, Unlock, FileText, User } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 interface NotesProps {
-    user: User | null;
+    user: UserType | null;
 }
 
 const Notes: React.FC<NotesProps> = ({ user }) => {
