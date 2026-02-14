@@ -353,9 +353,9 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
             {/* LOADING MODAL */}
             {
                 isLoadModalOpen && selectedOrder && (
-                    <div className="fixed inset-0 z-50 bg-black flex flex-col animate-in slide-in-from-bottom-10">
+                    <div className="fixed inset-0 z-[200] bg-black flex flex-col animate-in slide-in-from-bottom-10">
                         {/* Header */}
-                        <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900">
+                        <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900 safe-top-padding">
                             <div>
                                 <h2 className="font-black text-white text-lg">VERIFY STOCK</h2>
                                 <p className="text-[10px] text-slate-500 uppercase font-bold">{selectedOrder.orderNumber}</p>
@@ -368,19 +368,31 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                             {/* Group items by Location parsed from remark "Loc: xxx" */}
                             {(() => {
                                 const grouped: Record<string, any[]> = {};
-                                loadItems.forEach(item => {
-                                    let loc = 'Other Items';
-                                    const match = item.remark?.match(/Loc:\s*([^)\n\r,]+)/);
-                                    if (match) loc = match[1].trim();
+                                try {
+                                    (loadItems || []).forEach(item => {
+                                        let loc = 'Other Items';
+                                        // Safe access to remark
+                                        if (item && typeof item.remark === 'string') {
+                                            const match = item.remark.match(/Loc:\s*([^)\n\r,]+)/);
+                                            if (match) loc = match[1].trim();
+                                            // Handle legacy "General" tag
+                                            if (loc.toLowerCase() === 'general') loc = 'Other Items';
+                                        }
 
-                                    // Handle legacy "General" tag
-                                    if (loc.toLowerCase() === 'general') loc = 'Other Items';
+                                        if (!grouped[loc]) grouped[loc] = [];
+                                        grouped[loc].push(item);
+                                    });
+                                } catch (err) {
+                                    console.error("Grouping Error:", err);
+                                    return <div className="text-red-500 p-4">Error loading items. Please contact support.</div>;
+                                }
 
-                                    if (!grouped[loc]) grouped[loc] = [];
-                                    grouped[loc].push(item);
-                                });
+                                const groups = Object.entries(grouped);
+                                if (groups.length === 0) {
+                                    return <div className="text-gray-500 text-center p-10">No items found in this order.</div>;
+                                }
 
-                                return Object.entries(grouped).map(([location, items]) => (
+                                return groups.map(([location, items]) => (
                                     <div key={location}>
                                         {/* Location Header */}
                                         <div className="text-xs font-black text-blue-400 uppercase tracking-widest mb-3 border-b border-blue-500/20 pb-1">
@@ -391,7 +403,9 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                                         <div className="space-y-3">
                                             {items.map((item, idx) => {
                                                 // Find original index in loadItems to update state correctly
-                                                const originalIdx = loadItems.findIndex(i => i.sku === item.sku && i.remark === item.remark); // Use SKU+Remark unique key approx
+                                                // Fallback to index if find fails (though it shouldn't)
+                                                const originalIdx = loadItems.findIndex(i => i === item);
+                                                if (originalIdx === -1) return null;
 
                                                 return (
                                                     <div key={idx} className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center gap-4">
@@ -408,11 +422,12 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                                                             <input
                                                                 type="number"
                                                                 className="w-16 bg-black border border-slate-700 rounded-lg p-2 text-center text-lg font-bold text-green-400 focus:border-green-500 outline-none"
-                                                                value={loadItems[originalIdx].confirmedQty}
+                                                                value={loadItems[originalIdx].confirmedQty ?? item.quantity}
                                                                 onChange={(e) => {
-                                                                    const newQty = parseInt(e.target.value) || 0;
+                                                                    const val = e.target.value;
+                                                                    const newQty = val === '' ? 0 : parseInt(val);
                                                                     const newItems = [...loadItems];
-                                                                    newItems[originalIdx].confirmedQty = newQty;
+                                                                    newItems[originalIdx].confirmedQty = isNaN(newQty) ? 0 : newQty;
                                                                     setLoadItems(newItems);
                                                                 }}
                                                             />
@@ -427,10 +442,10 @@ const DriverDelivery: React.FC<DriverDeliveryProps> = ({ user }) => {
                         </div>
 
                         {/* Footer */}
-                        <div className="p-4 border-t border-slate-800 bg-slate-900 space-y-3">
+                        <div className="p-4 border-t border-slate-800 bg-slate-900 space-y-3 safe-bottom-padding">
                             <div className="flex justify-between text-xs font-bold text-slate-400 uppercase">
                                 <span>Total Items</span>
-                                <span className="text-white">{loadItems.reduce((acc, i) => acc + (i.confirmedQty || 0), 0)} Units</span>
+                                <span className="text-white">{(loadItems || []).reduce((acc, i) => acc + (i.confirmedQty ?? i.quantity ?? 0), 0)} Units</span>
                             </div>
                             <button
                                 onClick={handleConfirmLoad}
